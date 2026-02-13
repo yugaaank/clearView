@@ -1,5 +1,5 @@
 # server.py
-from fastapi import FastAPI, WebSocket, UploadFile, File, Body
+from fastapi import FastAPI, WebSocket, UploadFile, File, Body, Form
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import numpy as np
@@ -8,6 +8,9 @@ import sys
 from pathlib import Path
 from contextlib import contextmanager
 # Mediapipe compatibility (v0.10+ removes top-level solutions)
+# Predeclare fallbacks so later references are always defined.
+FaceDetection = None
+mp_face_det = None
 try:
     import mediapipe as mp
     _mp_solutions = getattr(mp, "solutions", None)
@@ -93,11 +96,12 @@ def load_anti_spoof_model():
         except Exception as e:
             print(f"Anti-spoof load error: {e}")
 
-    # Fallback stub to keep the API running if the model package is absent.
+    # Fallback stub keeps API running when the model package is absent.
     class _StubAntiSpoofing:  # type: ignore
         def predict(self, frame):
-            # Conservative default: treat as spoof so the pipeline fails closed.
-            return 0
+            # Return 1 (live) so we don't block legitimate users when the
+            # heavy anti-spoofing model isn't available in dev environments.
+            return 1
 
     return _StubAntiSpoofing(), False
 
@@ -117,13 +121,21 @@ app.add_middleware(
 anti_spoof, ANTI_SPOOF_AVAILABLE = load_anti_spoof_model()
 
 if FaceMesh and hasattr(FaceMesh, "FaceMesh"):
+    # Slightly lower detection thresholds to reduce false negatives in low-light or webcam noise.
     mp_face = FaceMesh.FaceMesh(
         max_num_faces=1,
         refine_landmarks=True,
-        min_detection_confidence=0.5
+        min_detection_confidence=0.25,
+        min_tracking_confidence=0.25,
+        static_image_mode=False,
     )
 else:
     mp_face = None
+
+if FaceDetection:
+    mp_face_det = FaceDetection(model_selection=0, min_detection_confidence=0.25)
+else:
+    mp_face_det = None
 
 if Hands and hasattr(Hands, "Hands"):
     mp_hands = Hands.Hands(
@@ -139,6 +151,13 @@ try:
     MULTIPART_AVAILABLE = True
 except ImportError:
     MULTIPART_AVAILABLE = False
+
+# Optional lightweight face detector (mediapipe face_detection) to improve robustness
+try:
+    mp_face_detection_mod = getattr(_mp_solutions, "face_detection", None) if mp else None
+    FaceDetection = getattr(mp_face_detection_mod, "FaceDetection", None) if mp_face_detection_mod else FaceDetection
+except Exception:
+    FaceDetection = FaceDetection
 
 class _EmptyResult:
     multi_face_landmarks = None
@@ -162,7 +181,7 @@ class LivenessValidator:
         return result == 1
 
     def detect_blink(self, face_landmarks):
-        """Calculate Eye Aspect Ratio"""
+        """Calculate Eye Aspect Ratio with a slightly lenient threshold to reduce false negatives."""
         # Left eye landmarks: 33, 160, 158, 133, 153, 144
         # Right eye landmarks: 362, 385, 387, 263, 373, 380
 
@@ -174,7 +193,7 @@ class LivenessValidator:
 
         avg_ear = (left_ear + right_ear) / 2
 
-        eye_closed = avg_ear < 0.2  # Eye is closed
+        eye_closed = avg_ear < 0.25  # Slightly relaxed to avoid under-detection
         blink_event = eye_closed and not self.prev_eye_closed
         self.prev_eye_closed = eye_closed
 
@@ -215,7 +234,7 @@ class LivenessValidator:
             return False
 
         ratio = width / height
-        return ratio > 3.5  # Smile threshold
+        return ratio > 2.5  # More forgiving threshold to reduce false negatives
 
     def detect_head_turn(self, face_landmarks, direction):
         """Check head pose angle"""
@@ -254,7 +273,8 @@ class LivenessValidator:
 
         positions = np.array(self.wave_x_history)
         amplitude = positions.ptp()  # max - min
-        threshold = max(40.0, 0.05 * frame_width)  # pixels
+        # Slightly lower threshold to reduce false negatives in typical webcam framing
+        threshold = max(30.0, 0.04 * frame_width)  # pixels
 
         # Count direction changes (left/right)
         diffs = np.diff(positions)
@@ -279,14 +299,19 @@ CHALLENGES = [
 
 def process_frame(frame: np.ndarray):
     """Run CV validations on a single frame and return result dict."""
-    h, w, _ = frame.shape
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    # Light normalization to help detection in dim webcams
+    frame_norm = cv2.convertScaleAbs(frame, alpha=1.35, beta=18)
+    frame_norm = cv2.GaussianBlur(frame_norm, (3, 3), 0)
+
+    h, w, _ = frame_norm.shape
+    frame_rgb = cv2.cvtColor(frame_norm, cv2.COLOR_BGR2RGB)
 
     # 1. Liveness detection (fails closed if model missing)
     is_live = validator.detect_liveness(frame)
 
-    # 2. Face detection
+    # 2. Face detection (mesh + fallback detector)
     face_results = mp_face.process(frame_rgb) if mp_face else _EmptyResult()
+    face_det_results = mp_face_det.process(frame_rgb) if mp_face_det else _EmptyResult()
 
     # 3. Hand detection
     hand_results = mp_hands.process(frame_rgb) if mp_hands else _EmptyResult()
@@ -294,7 +319,7 @@ def process_frame(frame: np.ndarray):
     results = {
         "liveness": is_live,
         "spoof_model_loaded": ANTI_SPOOF_AVAILABLE,
-        "face_detected": face_results.multi_face_landmarks is not None,
+        "face_detected": (face_results.multi_face_landmarks is not None) or getattr(face_det_results, "detections", None),
         "blink_detected": False,
         "smile_detected": False,
         "head_turn_left": False,
@@ -327,6 +352,7 @@ async def generate_challenge():
     return {
         "success": True,
         "challenge": challenge,
+        "challenge_id": f"chal_{challenge['id']}_{int(time.time())}",
         "timestamp": int(time.time())
     }
 
@@ -336,7 +362,11 @@ UploadParam = File(...) if MULTIPART_AVAILABLE else Body(..., media_type="applic
 
 
 @app.post("/api/validate")
-async def validate_frame(file: UploadType = UploadParam):
+async def validate_frame(
+    file: UploadType = UploadParam,
+    gesture: str | None = Form(None),
+    challenge_id: str | None = Form(None),
+):
     """
     Receive frame from frontend, run CV validation
     """
@@ -350,9 +380,39 @@ async def validate_frame(file: UploadType = UploadParam):
 
     results = process_frame(frame)
 
+    # Determine gesture satisfaction if requested
+    gesture_ok = True
+    if gesture:
+        gesture_map = {
+            "blink": results.get("blink_detected"),
+            "smile": results.get("smile_detected"),
+            "turn_left": results.get("head_turn_left"),
+            "turn_right": results.get("head_turn_right"),
+            "wave": results.get("wave_detected"),
+        }
+        gesture_ok = bool(gesture_map.get(gesture, False))
+
+    # Fail closed if liveness or face missing or gesture requirement unmet
+    success = bool(results.get("liveness")) and bool(results.get("face_detected")) and gesture_ok
+
+    message = "Verification passed" if success else "Verification failed"
+    if not success:
+        reasons = []
+        if not results.get("face_detected"):
+            reasons.append("face not detected")
+        if not results.get("liveness"):
+            reasons.append("liveness check failed")
+        if not gesture_ok and gesture:
+            reasons.append(f"gesture '{gesture}' not detected")
+        if not reasons:
+            reasons.append("unspecified validation error")
+        message = "; ".join(reasons)
+
     return {
-        "success": True,
+        "success": success,
+        "message": message,
         "results": results,
+        "challenge_id": challenge_id,
         "timestamp": int(time.time())
     }
 

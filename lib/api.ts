@@ -22,9 +22,23 @@ export interface ValidateResponse {
   results?: any;
 }
 
+export interface AnalyzeResponse {
+  label: 'real' | 'spoof' | string;
+  confidence: number;
+  passed?: boolean;
+  elapsed_ms?: number;
+  bbox?: { x: number; y: number; w: number; h: number };
+}
+
 const dataURItoBlob = (dataURI: string) => {
-  const byteString = atob(dataURI.split(',')[1]);
-  const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+  if (!dataURI || !dataURI.includes(',')) {
+    throw new Error('Invalid image data');
+  }
+  const [header, data] = dataURI.split(',');
+  const mimeMatch = header.match(/data:([^;]+);/);
+  const mimeString = mimeMatch?.[1] || 'image/jpeg';
+
+  const byteString = atob(data);
   const ab = new ArrayBuffer(byteString.length);
   const ia = new Uint8Array(ab);
   for (let i = 0; i < byteString.length; i++) {
@@ -51,7 +65,7 @@ export const api = {
     return response.json();
   },
 
-  validateChallenge: async (challengeId: string, imageData: string): Promise<ValidateResponse> => {
+  validateChallenge: async (challengeId: string, gesture: string | undefined, imageData: string): Promise<ValidateResponse> => {
     const baseUrl = getBaseUrl();
     const formData = new FormData();
 
@@ -59,6 +73,7 @@ export const api = {
     const blob = dataURItoBlob(imageData);
     formData.append('file', blob, 'capture.jpg');
     formData.append('challenge_id', challengeId);
+    if (gesture) formData.append('gesture', gesture);
 
     const response = await fetch(`${baseUrl}/api/validate`, {
       method: 'POST',
@@ -68,6 +83,24 @@ export const api = {
 
     if (!response.ok) {
       throw new Error('Validation failed');
+    }
+
+    return response.json();
+  },
+
+  analyzeFrame: async (imageData: string): Promise<AnalyzeResponse> => {
+    const baseUrl = getBaseUrl();
+    const formData = new FormData();
+    formData.append('file', dataURItoBlob(imageData), 'capture.jpg');
+
+    const response = await fetch(`${baseUrl}/analyze`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Analyze failed: ${response.status}`);
     }
 
     return response.json();

@@ -21,6 +21,10 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(({ onStreamRead
             const canvas = canvasRef.current;
             if (!video || !canvas) return null;
 
+            if (!video.videoWidth || !video.videoHeight) {
+                return null; // stream not ready
+            }
+
             const context = canvas.getContext('2d');
             if (!context) return null;
 

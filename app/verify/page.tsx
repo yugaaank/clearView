@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import CameraFeed, { CameraFeedHandle } from '@/components/CameraFeed';
@@ -36,15 +36,8 @@ export default function VerifyPage() {
 
             const chal = await api.getChallenge();
             setChallenge(chal);
-            setProcessing(false);
 
-            // Auto-capture after delay (simulating user performing gesture)
-            // In a real app, we might use face-api.js to detect the gesture live
-            // For this demo, we'll give the user 4 seconds to perform it
-            setTimeout(() => {
-                captureAndValidate(chal.challenge_id);
-            }, 4000);
-
+            await captureUntilValid(chal);
         } catch (err) {
             console.error(err);
             setConnectionStatus('error');
@@ -53,49 +46,72 @@ export default function VerifyPage() {
         }
     };
 
-    const captureAndValidate = async (challengeId: string) => {
+    const captureUntilValid = async (chal: ChallengeResponse) => {
         if (!cameraRef.current) return;
 
-        setProcessing(true);
-        setMessage('Verifying biometric data...');
+        const maxAttempts = 25;
+        const intervalMs = 600;
+        let streak = 0;
 
-        // Capture frame
-        const imageData = cameraRef.current.captureFrame();
-        if (!imageData) {
-            setStatus('fail');
-            setProcessing(false);
-            setMessage('Camera capture failed.');
-            return;
-        }
-
-        try {
-            const result = await api.validateChallenge(challengeId, imageData);
-
-            if (result.success) {
-                setStatus('success');
-                setMessage('Identity Verified.');
-                setTimeout(() => {
-                    router.push('/success');
-                }, 2000);
-            } else {
-                setStatus('fail');
-                setMessage(result.message || 'Verification failed.');
-                setTimeout(() => {
-                    // Reset to retry
-                    setStatus('idle');
-                    setChallenge(null);
-                    setMessage('');
-                    setProcessing(false);
-                }, 3000);
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const imageData = cameraRef.current.captureFrame();
+            if (!imageData) {
+                setStatus('scanning');
+                setMessage('Camera warming up... hold steady.');
+                await new Promise(res => setTimeout(res, 400));
+                continue;
             }
-        } catch (err) {
-            console.error(err);
-            setStatus('fail');
-            setMessage('Validation error.');
-            setTimeout(() => setStatus('idle'), 3000);
+
+            try {
+                const live = await api.analyzeFrame(imageData);
+                const spoofed = live.label !== 'real' || (live.passed === false) || live.confidence < 0.98;
+
+                if (spoofed) {
+                    streak = 0;
+                    setStatus('scanning');
+                    setMessage(`Liveness failed. Adjust face/lighting. (${attempt}/${maxAttempts})`);
+                } else {
+                    streak += 1;
+                    setStatus('scanning');
+                    setMessage(`Liveness ok (${live.confidence.toFixed(3)}). Hold... (${streak}/3)`);
+                }
+
+                if (streak >= 3) {
+                    const result = await api.validateChallenge(chal.challenge_id, chal.gesture, imageData);
+                    if (result.success) {
+                        setStatus('success');
+                        setMessage('Identity Verified.');
+                        setProcessing(false);
+                        setTimeout(() => router.push('/success'), 1200);
+                        return;
+                    } else {
+                        setStatus('fail');
+                        setMessage(result.message || 'Verification failed.');
+                        setTimeout(() => {
+                            setStatus('idle');
+                            setChallenge(null);
+                            setMessage('');
+                        }, 2000);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                setStatus('fail');
+                setMessage('Validation error. Retrying...');
+            }
+
+            await new Promise(res => setTimeout(res, intervalMs));
         }
 
+        setStatus('fail');
         setProcessing(false);
+        setMessage('Verification timeout. Try again.');
+        setTimeout(() => {
+            setStatus('idle');
+            setChallenge(null);
+            setMessage('');
+        }, 2000);
     };
 
     return (
