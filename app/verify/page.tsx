@@ -307,7 +307,7 @@ export default function VerifyPage() {
                     />
 
                     {status === 'scanning' && (
-                        <div className="absolute bottom-8 right-4 w-80 max-w-[90vw]">
+                        <div className="hidden md:block absolute bottom-8 right-4 w-80 max-w-[90vw]">
                             <ProgressTracker progress={progress} />
                         </div>
                     )}
