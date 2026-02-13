@@ -8,9 +8,15 @@ interface ChallengeCardProps {
     gesture?: string;
     onStart?: () => void;
     isLoading?: boolean;
+    countdown?: number | null;
+    quality?: {
+        center: boolean | null;
+        size: boolean | null;
+        light: boolean | null;
+    };
 }
 
-export default function ChallengeCard({ instruction, gesture, onStart, isLoading }: ChallengeCardProps) {
+export default function ChallengeCard({ instruction, gesture, onStart, isLoading, countdown, quality }: ChallengeCardProps) {
     const getIcon = (ges: string) => {
         switch (ges) {
             case 'smile': return <User className="w-8 h-8 text-neon-green" />;
@@ -20,6 +26,20 @@ export default function ChallengeCard({ instruction, gesture, onStart, isLoading
             case 'nod': return <User className="w-8 h-8 text-neon-blue" />;
             default: return <User className="w-8 h-8 text-muted-foreground" />;
         }
+    };
+
+    const renderIndicator = (label: string, value: boolean | null | undefined) => {
+        const color = value === true ? 'text-neon-green border-neon-green/70' :
+            value === false ? 'text-neon-red border-neon-red/70' :
+                'text-gray-400 border-white/10';
+        const dot = value === true ? 'bg-neon-green' : value === false ? 'bg-neon-red' : 'bg-gray-500';
+
+        return (
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-mono ${color}`}>
+                <span className={`w-2 h-2 rounded-full ${dot}`} />
+                <span>{label}</span>
+            </div>
+        );
     };
 
     return (
@@ -61,8 +81,13 @@ export default function ChallengeCard({ instruction, gesture, onStart, isLoading
                     ) : (
                         // Challenge Active State
                         <>
-                            <div className="text-xs uppercase tracking-[0.2em] text-neon-blue font-bold mb-1 animate-pulse">
-                                ACTION REQUIRED
+                            <div className="w-full flex items-center justify-between text-xs uppercase tracking-[0.2em] text-neon-blue font-bold mb-1">
+                                <span className="animate-pulse">ACTION REQUIRED</span>
+                                {typeof countdown === 'number' && (
+                                    <span className="text-white/70 font-mono normal-case tracking-tight bg-white/5 px-2 py-1 rounded-md border border-white/10">
+                                        {Math.max(countdown, 0)}s
+                                    </span>
+                                )}
                             </div>
                             <motion.div
                                 initial={{ scale: 0.8 }}
@@ -70,16 +95,21 @@ export default function ChallengeCard({ instruction, gesture, onStart, isLoading
                                 key={gesture}
                                 className="mb-2"
                             >
-                                {getIcon(gesture || '')}
-                            </motion.div>
-                            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                                {instruction}
-                            </h2>
-                            <div className="w-full bg-gray-800/50 h-1.5 rounded-full overflow-hidden mt-4">
-                                <motion.div
-                                    className="h-full bg-neon-green shadow-[0_0_10px_var(--neon-green)]"
-                                    initial={{ width: "0%" }}
-                                    animate={{ width: "100%" }}
+                        {getIcon(gesture || '')}
+                    </motion.div>
+                    <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+                        {instruction}
+                    </h2>
+                    <div className="flex flex-wrap gap-2 justify-center w-full">
+                        {renderIndicator('Center', quality?.center)}
+                        {renderIndicator('Distance', quality?.size)}
+                        {renderIndicator('Lighting', quality?.light)}
+                    </div>
+                    <div className="w-full bg-gray-800/50 h-1.5 rounded-full overflow-hidden mt-4">
+                        <motion.div
+                            className="h-full bg-neon-green shadow-[0_0_10px_var(--neon-green)]"
+                            initial={{ width: "0%" }}
+                            animate={{ width: "100%" }}
                                     transition={{ duration: 4, ease: "linear" }}
                                 />
                             </div>

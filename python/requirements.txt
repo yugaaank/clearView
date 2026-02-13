@@ -11,6 +11,7 @@ numpy==1.26.4
 opencv-python==4.10.0.84
 Pillow==10.4.0
 mediapipe==0.10.14
+PyJWT==2.10.1
 
 # Optional: Silent-Face-Anti-Spoofing is not on PyPI; install from GitHub if available.
 # pip install git+https://github.com/minivision-ai/Silent-Face-Anti-Spoofing.git

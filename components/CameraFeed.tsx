@@ -7,8 +7,15 @@ interface CameraFeedProps {
     className?: string;
 }
 
+export interface FrameCapture {
+    dataUrl: string;
+    width: number;
+    height: number;
+    brightness: number; // 0-255 average scene luminance
+}
+
 export interface CameraFeedHandle {
-    captureFrame: () => string | null;
+    captureFrame: () => FrameCapture | null;
 }
 
 const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(({ onStreamReady, className }, ref) => {
@@ -31,7 +38,31 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(({ onStreamRead
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            return canvas.toDataURL('image/jpeg', 0.8);
+
+            // Sample average brightness quickly (sub-sample grid to stay fast)
+            const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+            let luminanceSum = 0;
+            let samples = 0;
+            const step = Math.max(10, Math.floor(Math.min(canvas.width, canvas.height) / 80)); // adaptive stride
+            for (let y = 0; y < canvas.height; y += step) {
+                for (let x = 0; x < canvas.width; x += step) {
+                    const idx = (y * canvas.width + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+                    // perceptual luma
+                    luminanceSum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                    samples += 1;
+                }
+            }
+            const brightness = samples ? luminanceSum / samples : 0;
+
+            return {
+                dataUrl: canvas.toDataURL('image/jpeg', 0.8),
+                width: canvas.width,
+                height: canvas.height,
+                brightness,
+            };
         }
     }));
 

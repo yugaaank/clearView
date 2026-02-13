@@ -1,5 +1,5 @@
 # server.py
-from fastapi import FastAPI, WebSocket, UploadFile, File, Body, Form
+from fastapi import FastAPI, WebSocket, UploadFile, File, Body, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import numpy as np
@@ -22,6 +22,11 @@ except ImportError:
 import base64
 import time
 from collections import deque
+import uuid
+from datetime import datetime, timedelta
+
+from auth.jwt_tokens import get_token_manager
+from analytics.events import get_analytics_tracker, EventType
 
 @contextmanager
 def _workdir(path: Path):
@@ -107,6 +112,8 @@ def load_anti_spoof_model():
 
 
 app = FastAPI()
+analytics = get_analytics_tracker()
+token_manager = get_token_manager()
 
 # CORS for Vercel frontend
 app.add_middleware(
@@ -345,14 +352,27 @@ def process_frame(frame: np.ndarray):
 
 
 @app.post("/api/challenge")
-async def generate_challenge():
-    """Generate random challenge"""
+async def generate_challenge(body: dict | None = None):
+    """Generate random challenge with session id and analytics."""
     import random
     challenge = random.choice(CHALLENGES)
+    session_id = str(uuid.uuid4())
+    wallet_address = None
+    if body and isinstance(body, dict):
+        wallet_address = body.get("walletAddress")
+
+    analytics.track_event(
+        EventType.CHALLENGE_GENERATED,
+        session_id=session_id,
+        wallet_address=wallet_address,
+        metadata={"challenge_type": challenge["gesture"]}
+    )
+
     return {
         "success": True,
         "challenge": challenge,
         "challenge_id": f"chal_{challenge['id']}_{int(time.time())}",
+        "sessionId": session_id,
         "timestamp": int(time.time())
     }
 
@@ -361,11 +381,55 @@ UploadType = UploadFile if MULTIPART_AVAILABLE else bytes
 UploadParam = File(...) if MULTIPART_AVAILABLE else Body(..., media_type="application/octet-stream")
 
 
+@app.post("/analyze")
+async def analyze_frame_api(
+    file: UploadType = UploadParam,
+    session_id: str | None = Form(None),
+    wallet_address: str | None = Form(None),
+):
+    """Analyze a single frame for liveness and pose; mirrors frontend expectations."""
+    contents = await file.read() if not isinstance(file, bytes) else file
+    nparr = np.frombuffer(contents, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(status_code=400, detail="Invalid frame")
+
+    h, w, _ = frame.shape
+    results = process_frame(frame)
+
+    # Build bbox if face detected via mediapipe mesh
+    bbox = None
+    # quick approximate bbox using detection if available
+    if mp_face_det:
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        det = mp_face_det.process(frame_rgb)
+        if getattr(det, "detections", None):
+            d = det.detections[0]
+            box = d.location_data.relative_bounding_box
+            bbox = {
+                "x": int(box.xmin * w),
+                "y": int(box.ymin * h),
+                "w": int(box.width * w),
+                "h": int(box.height * h),
+            }
+
+    payload = {
+        "label": "real" if results.get("liveness") else "spoof",
+        "confidence": 0.99 if results.get("liveness") else 0.2,
+        "passed": results.get("liveness"),
+        "bbox": bbox,
+    }
+
+    return payload
+
+
 @app.post("/api/validate")
 async def validate_frame(
     file: UploadType = UploadParam,
     gesture: str | None = Form(None),
     challenge_id: str | None = Form(None),
+    wallet_address: str | None = Form(None),
+    session_id: str | None = Form(None),
 ):
     """
     Receive frame from frontend, run CV validation
@@ -408,13 +472,46 @@ async def validate_frame(
             reasons.append("unspecified validation error")
         message = "; ".join(reasons)
 
-    return {
+    response = {
         "success": success,
         "message": message,
         "results": results,
         "challenge_id": challenge_id,
         "timestamp": int(time.time())
     }
+
+    # Analytics
+    if session_id:
+        analytics.track_validation_result(
+            session_id=session_id,
+            success=success,
+            challenge_type=gesture or "unknown",
+            liveness_confidence=1.0 if results.get("liveness") else 0.0,
+            gesture_confidence=1.0 if gesture_ok else 0.0,
+            wallet_address=wallet_address,
+            failure_reason=None if success else message
+        )
+
+    # On success create verification token
+    if success and wallet_address:
+        proof_hash = token_manager.generate_proof_hash([contents], challenge_id or "", wallet_address)
+        verification_token = token_manager.create_verification_token(
+            wallet_address=wallet_address,
+            challenge_type=gesture or "unknown",
+            proof_hash=proof_hash,
+            session_id=session_id or str(uuid.uuid4()),
+            additional_claims={
+                "liveness_confidence": 1.0 if results.get("liveness") else 0.0,
+                "gesture_detected": gesture_ok
+            }
+        )
+        response.update({
+            "verificationToken": verification_token,
+            "proofHash": proof_hash,
+            "expiresAt": int((datetime.utcnow() + timedelta(hours=24)).timestamp())
+        })
+
+    return response
 
 
 @app.websocket("/ws/video")
@@ -455,6 +552,35 @@ async def video_stream(websocket: WebSocket):
         print(f"WebSocket error: {e}")
     finally:
         await websocket.close()
+
+
+@app.post("/api/verify-token")
+async def verify_token(data: dict):
+    """
+    Verify a JWT token for minting authorization.
+    """
+    token = data.get("token")
+    wallet_address = data.get("walletAddress")
+
+    if not token or not wallet_address:
+        raise HTTPException(status_code=400, detail="Missing token or wallet address")
+
+    try:
+        valid = token_manager.verify_for_minting(token, wallet_address)
+        if not valid:
+            return {"valid": False, "reason": "Invalid token or wallet mismatch"}
+
+        payload = token_manager.validate_token(token)
+        return {
+            "valid": True,
+            "wallet": payload["sub"],
+            "proofHash": payload["proof_hash"],
+            "challengeType": payload["challenge_type"],
+            "verifiedAt": payload["verified_at"],
+            "expiresAt": payload["exp"],
+        }
+    except ValueError as e:
+        return {"valid": False, "reason": str(e)}
 
 if __name__ == "__main__":
     try:
