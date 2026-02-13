@@ -36,6 +36,8 @@ export interface AnalyzeResponse {
   passed?: boolean;
   elapsed_ms?: number;
   bbox?: { x: number; y: number; w: number; h: number };
+  error?: string;
+  status?: number;
 }
 
 const dataURItoBlob = (dataURI: string) => {
@@ -116,9 +118,16 @@ export const api = {
       body: formData,
     });
 
+    // Surface backend validation feedback to the UI instead of throwing.
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(text || `Analyze failed: ${response.status}`);
+      return {
+        label: 'error',
+        confidence: 0,
+        passed: false,
+        error: text || 'Unable to analyze frame',
+        status: response.status,
+      };
     }
 
     return response.json();

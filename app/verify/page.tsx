@@ -110,6 +110,15 @@ export default function VerifyPage() {
 
             try {
                 const live = await api.analyzeFrame(capture.dataUrl);
+
+                // Handle backend validation feedback (e.g., missing face) without throwing.
+                if (live.label === 'error') {
+                    setStatus('scanning');
+                    setMessage(live.error || 'Frame rejected, adjust and hold steady.');
+                    await new Promise(res => setTimeout(res, 400));
+                    continue;
+                }
+
                 const quality = evaluateFaceQuality(live, capture);
                 setQuality({ center: quality.centerOk, size: quality.sizeOk, light: quality.lightOk });
 
