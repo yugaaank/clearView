@@ -89,7 +89,7 @@ export default function ProgressTracker({ progress }: ProgressTrackerProps) {
           <Clock className="w-4 h-4" />
           <span>Time: {progress.timeRemaining}s</span>
         </div>
-        <span>Attempt {progress.attemptNumber} of 3</span>
+        <span>Attempt {progress.attemptNumber} of 10</span>
       </div>
 
       {/* Ready Indicator */}

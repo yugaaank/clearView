@@ -91,8 +91,13 @@ export default function VerifyPage() {
     const captureUntilValid = async (chal: ChallengeResponse) => {
         if (!cameraRef.current) return;
 
-        const maxAttempts = 25;
+        const maxAttempts = 40;
         const intervalMs = 600;
+        const minSamples = 10;   // minimum frames to average
+        const maxSamples = 15;   // cap to avoid long waits
+        const samples: { confidence: number; capture: FrameCapture }[] = [];
+        let bestCapture: { confidence: number; capture: FrameCapture } | null = null;
+        let streak = 0;
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             const capture = cameraRef.current.captureFrame();
@@ -125,32 +130,55 @@ export default function VerifyPage() {
                 updateFromAnalysis(analysisPayload);
 
                 if (!quality.ok) {
-                    setStatus('scanning');
-                    setMessage(`${quality.reason} (${attempt}/${maxAttempts})`);
-                } else {
-                    setStatus('scanning');
-                    setMessage(`Face verified (${live.confidence.toFixed(3)}). Submitting...`);
-
-                    const result = await api.validateChallenge(chal.challenge_id, chal.gesture, capture.dataUrl);
-                    if (result.success) {
-                        setStatus('success');
-                        setMessage('Identity Verified.');
-                        setProcessing(false);
-                        setCountdown(null);
-                        setTimeout(() => router.push('/success'), 1200);
-                        return;
+                    // Break streak and reset accumulated samples if quality drops
+                    if (samples.length > 0 || streak > 0) {
+                        samples.length = 0;
+                        bestCapture = null;
+                        streak = 0;
+                        setMessage(`Quality lost: ${quality.reason}. Restarting capture window.`);
                     } else {
-                        setStatus('fail');
-                        setProcessing(false);
-                        setMessage(result.message || 'Verification failed.');
-                        setTimeout(() => {
-                            setStatus('idle');
-                            setChallenge(null);
-                            setMessage('');
+                        setStatus('scanning');
+                        setMessage(`${quality.reason} (${attempt}/${maxAttempts})`);
+                    }
+                } else {
+                    // Collect good samples for averaging
+                    streak += 1;
+                    samples.push({ confidence: live.confidence, capture });
+                    if (!bestCapture || live.confidence > bestCapture.confidence) {
+                        bestCapture = { confidence: live.confidence, capture };
+                    }
+
+                    setStatus('scanning');
+                    setMessage(`Quality OK ${samples.length}/${minSamples} (avg ${(
+                        samples.reduce((a, b) => a + b.confidence, 0) / samples.length
+                    ).toFixed(3)})`);
+
+                    // Once we have enough samples (or hit cap), submit using best frame
+                    if (samples.length >= minSamples || samples.length >= maxSamples) {
+                        const avgConfidence = samples.reduce((a, b) => a + b.confidence, 0) / samples.length;
+                        setMessage(`Submitting after ${samples.length} samples (avg ${avgConfidence.toFixed(3)})...`);
+                        const frameToSend = bestCapture?.capture ?? capture;
+                        const result = await api.validateChallenge(chal.challenge_id, chal.gesture, frameToSend.dataUrl);
+                        if (result.success) {
+                            setStatus('success');
+                            setMessage('Identity Verified.');
+                            setProcessing(false);
                             setCountdown(null);
-                            setQuality({ center: null, size: null, light: null });
-                        }, 2000);
-                        return;
+                            setTimeout(() => router.push('/success'), 1200);
+                            return;
+                        } else {
+                            setStatus('fail');
+                            setProcessing(false);
+                            setMessage(result.message || 'Verification failed.');
+                            setTimeout(() => {
+                                setStatus('idle');
+                                setChallenge(null);
+                                setMessage('');
+                                setCountdown(null);
+                                setQuality({ center: null, size: null, light: null });
+                            }, 2000);
+                            return;
+                        }
                     }
                 }
             } catch (err) {

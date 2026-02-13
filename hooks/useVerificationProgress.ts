@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { VerificationProgress, AnalysisResponse, CheckStatus } from '@/types/verification';
 
+const MAX_ATTEMPTS = 10;
+
 export function useVerificationProgress() {
   const [progress, setProgress] = useState<VerificationProgress>({
     phase: 'init',
@@ -13,7 +15,7 @@ export function useVerificationProgress() {
     },
     checks: [],
     attemptNumber: 1,
-    attemptsRemaining: 2,
+    attemptsRemaining: MAX_ATTEMPTS - 1,
     timeRemaining: 60,
     readyForValidation: false,
     hints: [],
@@ -75,7 +77,7 @@ export function useVerificationProgress() {
       ...prev,
       phase: 'scanning',
       attemptNumber,
-      attemptsRemaining: Math.max(0, 3 - attemptNumber),
+      attemptsRemaining: Math.max(0, MAX_ATTEMPTS - attemptNumber),
       timeRemaining: 60,
     }));
   }, []);
@@ -103,7 +105,7 @@ export function useVerificationProgress() {
       },
       checks: [],
       attemptNumber: 1,
-      attemptsRemaining: 2,
+      attemptsRemaining: MAX_ATTEMPTS - 1,
       timeRemaining: 60,
       readyForValidation: false,
       hints: [],
