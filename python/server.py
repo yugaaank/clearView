@@ -503,15 +503,16 @@ async def validate_frame(
     center_ok = False
     offset_x = offset_y = 1.0
     if bbox:
+        # Allow slightly smaller faces so users can stand farther back: 5% min area, 40% center tolerance.
         coverage = (bbox["w"] * bbox["h"]) / float(w * h)
-        size_ok = coverage >= 0.12  # match frontend gate
+        size_ok = coverage >= 0.05
         face_cx = bbox["x"] + bbox["w"] / 2
         face_cy = bbox["y"] + bbox["h"] / 2
         cx = w / 2
         cy = h / 2
         offset_x = abs(face_cx - cx) / w
         offset_y = abs(face_cy - cy) / h
-        center_ok = offset_x <= 0.30 and offset_y <= 0.30
+        center_ok = offset_x <= 0.40 and offset_y <= 0.40
 
     quality_ok = bool(bbox) and size_ok and center_ok
 
