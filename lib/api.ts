@@ -1,11 +1,19 @@
 // Dynamically determine the API base URL.
-// In production, this would be an environment variable.
-// For this hybrid dev setup, we want it to match the current hostname (localhost or IP).
+// Uses NEXT_PUBLIC_API_BASE when provided; otherwise derives from current origin.
+// Handles both HTTP (localhost) and HTTPS dev proxy (e.g., https://<ip>:3001).
 const getBaseUrl = () => {
+  // Explicit override wins (set NEXT_PUBLIC_API_BASE="https://host:port")
+  const envBase = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_BASE)?.trim();
+  if (envBase) return envBase.replace(/\/$/, '');
+
+  const envProtocol = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_PROTOCOL)?.trim();
+  const envPort = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_PORT)?.trim();
+
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    return `http://${hostname}:8000`;
+    // Prefer relative path to leverage Next.js rewrites and avoid mixed-content.
+    return '';
   }
+
   return 'http://localhost:8000';
 };
 
@@ -62,7 +70,17 @@ export const api = {
       throw new Error('Failed to fetch challenge');
     }
 
-    return response.json();
+    const data = await response.json();
+
+    // Normalize backend variants:
+    // - legacy: {challenge_id, gesture, instruction}
+    // - current: {challenge: {gesture,instruction}, challenge_id, ...}
+    const challenge = (data.challenge ?? data) as any;
+    return {
+      challenge_id: data.challenge_id ?? challenge.challenge_id ?? crypto.randomUUID(),
+      gesture: challenge.gesture,
+      instruction: challenge.instruction,
+    };
   },
 
   validateChallenge: async (challengeId: string, gesture: string | undefined, imageData: string): Promise<ValidateResponse> => {

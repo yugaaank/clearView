@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import CameraFeed, { CameraFeedHandle, FrameCapture } from '@/components/CameraFeed';
+import CameraPermissionHandler from '@/components/CameraPermissionHandler';
 import FaceOverlay from '@/components/FaceOverlay';
 import ChallengeCard from '@/components/ChallengeCard';
 import StatusIndicator from '@/components/StatusIndicator';
@@ -19,6 +20,7 @@ export default function VerifyPage() {
     const [status, setStatus] = useState<'idle' | 'scanning' | 'success' | 'fail'>('idle');
     const [challenge, setChallenge] = useState<ChallengeResponse | null>(null);
     const [feedReady, setFeedReady] = useState(false);
+    const [cameraAllowed, setCameraAllowed] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
     const [processing, setProcessing] = useState(false);
     const [message, setMessage] = useState<string>('');
@@ -176,8 +178,8 @@ export default function VerifyPage() {
      * Evaluate frame beyond streak counting: full face presence, reasonable size, centered, and liveness score.
      */
     const evaluateFaceQuality = (live: AnalyzeResponse, capture: FrameCapture) => {
-        // Require backend liveness pass flag and high confidence
-        const confidenceOk = live.label === 'real' && live.passed !== false && live.confidence >= 0.98;
+        // Require backend liveness pass flag and reasonable confidence (loosened to reduce false negatives)
+        const confidenceOk = live.label === 'real' && live.passed !== false && live.confidence >= 0.9;
         if (!confidenceOk) {
             return { ok: false, reason: `Liveness failed (${live.confidence?.toFixed?.(3) ?? '0'})`, centerOk: null, sizeOk: null, lightOk: null, coverage: 0, offsetX: 0, offsetY: 0 };
         }
@@ -188,7 +190,7 @@ export default function VerifyPage() {
             return { ok: false, reason: 'Face not detected. Move closer.', centerOk: false, sizeOk: false, lightOk: evaluateLighting(capture), coverage: 0, offsetX: 0, offsetY: 0 };
         }
 
-        const minFaceCoverage = 0.12; // 12% of frame area (loosened)
+        const minFaceCoverage = 0.08; // 8% of frame area (loosened for smaller framing)
         const coverage = (box.w * box.h) / (capture.width * capture.height);
         const sizeOk = coverage >= minFaceCoverage;
 
@@ -197,7 +199,7 @@ export default function VerifyPage() {
         const faceCenterY = box.y + box.h / 2;
         const cx = capture.width / 2;
         const cy = capture.height / 2;
-        const maxOffset = 0.30; // 30% offset allowed (loosened)
+        const maxOffset = 0.35; // allow slight off-center framing
         const offsetX = Math.abs(faceCenterX - cx) / capture.width;
         const offsetY = Math.abs(faceCenterY - cy) / capture.height;
         const centerOk = offsetX <= maxOffset && offsetY <= maxOffset;
@@ -223,6 +225,22 @@ export default function VerifyPage() {
         const max = 230;
         return brightness >= min && brightness <= max;
     };
+
+    if (!cameraAllowed) {
+        return (
+            <main className="min-h-screen flex items-center justify-center bg-black text-white p-4">
+                <div className="w-full max-w-md">
+                    <CameraPermissionHandler
+                        onPermissionGranted={() => setCameraAllowed(true)}
+                        onPermissionDenied={() => {
+                            setCameraAllowed(false);
+                            analytics.track('camera_permission_denied');
+                        }}
+                    />
+                </div>
+            </main>
+        );
+    }
 
     return (
         <main className="fixed inset-0 bg-black text-white overflow-hidden flex flex-col">

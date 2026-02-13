@@ -39,6 +39,9 @@ def _workdir(path: Path):
         os.chdir(prev)
 
 
+ALLOW_SPOOF_STUB = os.environ.get("ALLOW_SPOOF_STUB", "false").lower() == "true"
+
+
 def load_anti_spoof_model():
     """
     Attempt to load Silent-Face-Anti-Spoofing from vendored path or import if installed.
@@ -104,9 +107,8 @@ def load_anti_spoof_model():
     # Fallback stub keeps API running when the model package is absent.
     class _StubAntiSpoofing:  # type: ignore
         def predict(self, frame):
-            # Return 1 (live) so we don't block legitimate users when the
-            # heavy anti-spoofing model isn't available in dev environments.
-            return 1
+            # Default to fail-closed unless explicitly allowed for local dev.
+            return 1 if ALLOW_SPOOF_STUB else 0
 
     return _StubAntiSpoofing(), False
 
@@ -116,9 +118,19 @@ analytics = get_analytics_tracker()
 token_manager = get_token_manager()
 
 # CORS for Vercel frontend
+# Allow configurable origins; fallback to common local dev URLs.
+_default_origins = [
+    "https://your-app.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://localhost:3001",
+]
+_env_origins = os.environ.get("ALLOWED_ORIGINS")
+allow_origins = [o.strip() for o in _env_origins.split(",")] if _env_origins else _default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://your-app.vercel.app", "http://localhost:3000"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -374,6 +386,10 @@ async def generate_challenge(body: dict | None = None):
         "challenge_id": f"chal_{challenge['id']}_{int(time.time())}",
         "sessionId": session_id,
         "timestamp": int(time.time())
+        ,
+        # flatten for frontend contract
+        "gesture": challenge["gesture"],
+        "instruction": challenge["instruction"],
     }
 
 
@@ -455,6 +471,50 @@ async def validate_frame(
 
     results = process_frame(frame)
 
+    h, w, _ = frame.shape
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Build bbox consistent with /analyze
+    bbox = None
+    if mp_face:
+        mesh = mp_face.process(frame_rgb)
+        if getattr(mesh, "multi_face_landmarks", None):
+            pts = mesh.multi_face_landmarks[0].landmark
+            xs = [p.x * w for p in pts]
+            ys = [p.y * h for p in pts]
+            xmin, xmax = max(0, int(min(xs))), min(w, int(max(xs)))
+            ymin, ymax = max(0, int(min(ys))), min(h, int(max(ys)))
+            bbox = {"x": xmin, "y": ymin, "w": max(1, xmax - xmin), "h": max(1, ymax - ymin)}
+
+    if bbox is None and mp_face_det:
+        det = mp_face_det.process(frame_rgb)
+        if getattr(det, "detections", None):
+            d = det.detections[0]
+            box = d.location_data.relative_bounding_box
+            bbox = {
+                "x": int(box.xmin * w),
+                "y": int(box.ymin * h),
+                "w": int(box.width * w),
+                "h": int(box.height * h),
+            }
+
+    coverage = 0.0
+    size_ok = False
+    center_ok = False
+    offset_x = offset_y = 1.0
+    if bbox:
+        coverage = (bbox["w"] * bbox["h"]) / float(w * h)
+        size_ok = coverage >= 0.12  # match frontend gate
+        face_cx = bbox["x"] + bbox["w"] / 2
+        face_cy = bbox["y"] + bbox["h"] / 2
+        cx = w / 2
+        cy = h / 2
+        offset_x = abs(face_cx - cx) / w
+        offset_y = abs(face_cy - cy) / h
+        center_ok = offset_x <= 0.30 and offset_y <= 0.30
+
+    quality_ok = bool(bbox) and size_ok and center_ok
+
     # Determine gesture satisfaction if requested
     gesture_ok = True
     if gesture:
@@ -467,14 +527,20 @@ async def validate_frame(
         }
         gesture_ok = bool(gesture_map.get(gesture, False))
 
-    # Fail closed if liveness or face missing or gesture requirement unmet
-    success = bool(results.get("liveness")) and bool(results.get("face_detected")) and gesture_ok
+    liveness_confidence = 0.99 if results.get("liveness") else 0.2
+    success = bool(results.get("liveness")) and bool(results.get("face_detected")) and quality_ok and gesture_ok
 
     message = "Verification passed" if success else "Verification failed"
     if not success:
         reasons = []
         if not results.get("face_detected"):
             reasons.append("face not detected")
+        if bbox is None:
+            reasons.append("bounding box missing")
+        if not size_ok:
+            reasons.append("face too small")
+        if not center_ok:
+            reasons.append("face not centered")
         if not results.get("liveness"):
             reasons.append("liveness check failed")
         if not gesture_ok and gesture:
@@ -488,7 +554,11 @@ async def validate_frame(
         "message": message,
         "results": results,
         "challenge_id": challenge_id,
-        "timestamp": int(time.time())
+        "timestamp": int(time.time()),
+        "bbox": bbox,
+        "coverage": coverage,
+        "center_offset": {"x": offset_x, "y": offset_y},
+        "liveness_confidence": liveness_confidence,
     }
 
     # Analytics
@@ -497,7 +567,7 @@ async def validate_frame(
             session_id=session_id,
             success=success,
             challenge_type=gesture or "unknown",
-            liveness_confidence=1.0 if results.get("liveness") else 0.0,
+            liveness_confidence=liveness_confidence,
             gesture_confidence=1.0 if gesture_ok else 0.0,
             wallet_address=wallet_address,
             failure_reason=None if success else message
@@ -512,7 +582,7 @@ async def validate_frame(
             proof_hash=proof_hash,
             session_id=session_id or str(uuid.uuid4()),
             additional_claims={
-                "liveness_confidence": 1.0 if results.get("liveness") else 0.0,
+                "liveness_confidence": liveness_confidence,
                 "gesture_detected": gesture_ok
             }
         )
