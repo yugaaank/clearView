@@ -188,7 +188,7 @@ export default function VerifyPage() {
             return { ok: false, reason: 'Face not detected. Move closer.', centerOk: false, sizeOk: false, lightOk: evaluateLighting(capture), coverage: 0, offsetX: 0, offsetY: 0 };
         }
 
-        const minFaceCoverage = 0.18; // 18% of frame area
+        const minFaceCoverage = 0.12; // 12% of frame area (loosened)
         const coverage = (box.w * box.h) / (capture.width * capture.height);
         const sizeOk = coverage >= minFaceCoverage;
 
@@ -197,7 +197,7 @@ export default function VerifyPage() {
         const faceCenterY = box.y + box.h / 2;
         const cx = capture.width / 2;
         const cy = capture.height / 2;
-        const maxOffset = 0.22; // 22% offset allowed
+        const maxOffset = 0.30; // 30% offset allowed (loosened)
         const offsetX = Math.abs(faceCenterX - cx) / capture.width;
         const offsetY = Math.abs(faceCenterY - cy) / capture.height;
         const centerOk = offsetX <= maxOffset && offsetY <= maxOffset;
@@ -219,8 +219,8 @@ export default function VerifyPage() {
 
     const evaluateLighting = (capture: FrameCapture) => {
         const brightness = capture.brightness;
-        const min = 60;
-        const max = 210;
+        const min = 40;
+        const max = 230;
         return brightness >= min && brightness <= max;
     };
 

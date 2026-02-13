@@ -397,11 +397,22 @@ async def analyze_frame_api(
     h, w, _ = frame.shape
     results = process_frame(frame)
 
-    # Build bbox if face detected via mediapipe mesh
+    # Build bbox if face detected via mediapipe mesh or face_detection
     bbox = None
-    # quick approximate bbox using detection if available
-    if mp_face_det:
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    if mp_face:
+        mesh = mp_face.process(frame_rgb)
+        if getattr(mesh, "multi_face_landmarks", None):
+            pts = mesh.multi_face_landmarks[0].landmark
+            xs = [p.x * w for p in pts]
+            ys = [p.y * h for p in pts]
+            xmin, xmax = max(0, int(min(xs))), min(w, int(max(xs)))
+            ymin, ymax = max(0, int(min(ys))), min(h, int(max(ys)))
+            bbox = {"x": xmin, "y": ymin, "w": max(1, xmax - xmin), "h": max(1, ymax - ymin)}
+
+    # fallback to face detection if mesh failed
+    if bbox is None and mp_face_det:
         det = mp_face_det.process(frame_rgb)
         if getattr(det, "detections", None):
             d = det.detections[0]
