@@ -7,15 +7,15 @@ const getBaseUrl = () => {
   const normalizedEnvBase = typeof envBase === 'string' ? envBase.trim() : '';
   if (normalizedEnvBase) return normalizedEnvBase.replace(/\/$/, '');
 
-  // Hard default to ngrok tunnel for deployments where env isn't set.
-  const fallback = 'https://unstated-grimily-babette.ngrok-free.dev';
-  if (typeof window !== 'undefined') return fallback;
+  // When running in the browser, prefer relative URLs so Next.js rewrites can proxy to the API_BASE.
+  if (typeof window !== 'undefined') return '';
 
   if (typeof window !== 'undefined') {
     // Prefer relative path to leverage Next.js rewrites and avoid mixed-content.
     return '';
   }
 
+  // SSR / node fallback
   return 'http://localhost:8000';
 };
 
@@ -40,6 +40,19 @@ export interface AnalyzeResponse {
   bbox?: { x: number; y: number; w: number; h: number };
   error?: string;
   status?: number;
+}
+
+export interface VoiceVerifyResponse {
+  success: boolean;
+  label: string;
+  score: number;
+  similarity?: number | null;
+  duration: number;
+  energy: number;
+  reference_duration?: number;
+  reference_energy?: number;
+  status?: number;
+  error?: string;
 }
 
 const dataURItoBlob = (dataURI: string) => {
@@ -136,5 +149,65 @@ export const api = {
     }
 
     return response.json();
+  },
+
+  voiceVerify: async (audioBlob: Blob, referenceBlob?: Blob | null): Promise<VoiceVerifyResponse> => {
+    const baseUrl = getBaseUrl();
+    const formData = new FormData();
+    // Sent as 'file' to match server expectation
+    formData.append('file', audioBlob, 'speech.wav');
+    if (referenceBlob) formData.append('reference', referenceBlob, 'reference.wav');
+
+    const response = await fetch(`${baseUrl}/api/voice-verify`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const safeJson = async () => {
+      try {
+        return await response.json();
+      } catch {
+        return null;
+      }
+    };
+
+    if (!response.ok) {
+      let detail = 'Voice verification failed';
+      const data = await safeJson();
+      if (data) {
+        detail = data.detail || data.error || JSON.stringify(data);
+      } else {
+        try {
+          detail = await response.text();
+        } catch {
+          // keep default
+        }
+      }
+
+      return {
+        success: false,
+        label: 'error',
+        score: 0,
+        duration: 0,
+        energy: 0,
+        status: response.status,
+        error: detail,
+      };
+    }
+
+    const data = await safeJson();
+    if (!data) {
+      return {
+        success: false,
+        label: 'error',
+        score: 0,
+        duration: 0,
+        energy: 0,
+        status: response.status,
+        error: 'Empty response from voice service',
+      };
+    }
+
+    return data as VoiceVerifyResponse;
   },
 };

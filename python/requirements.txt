@@ -13,5 +13,13 @@ Pillow==10.4.0
 mediapipe==0.10.14
 PyJWT==2.10.1
 
+# Voice anti-spoofing / speaker verification
+Resemblyzer==0.1.1.dev0
+torch==2.2.1
+torchaudio==2.2.1
+librosa==0.10.2.post1
+soundfile==0.12.1
+webrtcvad==2.0.10
+
 # Optional: Silent-Face-Anti-Spoofing is not on PyPI; install from GitHub if available.
 # pip install git+https://github.com/minivision-ai/Silent-Face-Anti-Spoofing.git

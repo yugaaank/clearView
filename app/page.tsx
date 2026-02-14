@@ -69,6 +69,13 @@ export default function Home() {
             <Lock className="w-4 h-4" />
             <span>Learn More</span>
           </button>
+
+          <Link href="/voice">
+            <button className="px-8 py-4 rounded-lg bg-neon-blue/10 border border-neon-blue/30 hover:bg-neon-blue/20 transition-colors font-medium text-neon-blue flex items-center gap-2 backdrop-blur-sm">
+              <span className="w-2 h-2 rounded-full bg-neon-blue animate-pulse" />
+              <span>Test Voice Mode</span>
+            </button>
+          </Link>
         </motion.div>
 
         {/* Feature Grid */}
