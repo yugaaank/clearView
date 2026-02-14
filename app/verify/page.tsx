@@ -404,7 +404,7 @@ export default function VerifyPage() {
             }
             setVoiceMessage('Voice verified.');
             setStatus('success');
-            setTimeout(() => router.push('/success'), 1200);
+            setTimeout(() => router.push('/dashboard'), 800);
         } catch (err) {
             console.error(err);
             const msg = err instanceof Error ? err.message : 'Unable to capture or verify voice.';
