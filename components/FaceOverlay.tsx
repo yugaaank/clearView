@@ -14,7 +14,7 @@ export default function FaceOverlay({ status }: FaceOverlayProps) {
     return (
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
             {/* Face Guide Oval */}
-            <div className="relative w-64 h-80 sm:w-72 sm:h-96">
+            <div className="relative w-80 h-[400px] sm:w-[400px] sm:h-[500px]">
                 <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 120">
                     <defs>
                         <linearGradient id="scan-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -87,12 +87,12 @@ export default function FaceOverlay({ status }: FaceOverlayProps) {
             {/* Radar Circles Background (Subtle) */}
             <div className="absolute inset-0 flex items-center justify-center opacity-20">
                 <motion.div
-                    className="w-96 h-96 border border-neon-blue rounded-full"
+                    className="w-[450px] h-[450px] border border-neon-blue rounded-full"
                     animate={{ scale: [1, 1.1], opacity: [0.5, 0] }}
                     transition={{ duration: 2, repeat: Infinity }}
                 />
                 <motion.div
-                    className="w-[500px] h-[500px] border border-neon-cyan rounded-full absolute"
+                    className="w-[550px] h-[550px] border border-neon-cyan rounded-full absolute"
                     animate={{ scale: [1, 1.1], opacity: [0.3, 0] }}
                     transition={{ duration: 2, delay: 1, repeat: Infinity }}
                 />

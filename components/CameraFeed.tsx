@@ -126,7 +126,7 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(({ onStreamRead
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover transform scale-x-[-1]" // Mirror effect
+                className="w-full h-full object-contain transform scale-x-[-1]" // Mirror effect
             />
             <canvas ref={canvasRef} className="hidden" />
 
