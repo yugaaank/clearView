@@ -1,23 +1,7 @@
-// Dynamically determine the API base URL.
-// Uses NEXT_PUBLIC_API_BASE when provided; otherwise derives from current origin.
-// Handles both HTTP (localhost) and HTTPS dev proxy (e.g., https://<ip>:3001).
-const getBaseUrl = () => {
-  // Explicit override wins (set NEXT_PUBLIC_API_BASE="https://host:port")
-  const envBase = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_API_BASE : undefined;
-  const normalizedEnvBase = typeof envBase === 'string' ? envBase.trim() : '';
-  if (normalizedEnvBase) return normalizedEnvBase.replace(/\/$/, '');
-
-  // When running in the browser, prefer relative URLs so Next.js rewrites can proxy to the API_BASE.
-  if (typeof window !== 'undefined') return '';
-
-  if (typeof window !== 'undefined') {
-    // Prefer relative path to leverage Next.js rewrites and avoid mixed-content.
-    return '';
-  }
-
-  // SSR / node fallback
-  return 'http://localhost:8000';
-};
+// Hardcoded API base to force traffic through the provided ngrok tunnel.
+// If this needs to become configurable again, reintroduce the env-based logic.
+const BASE_URL = 'https://unstated-grimily-babette.ngrok-free.dev';
+const getBaseUrl = () => BASE_URL;
 
 export interface ChallengeResponse {
   challenge_id: string;
