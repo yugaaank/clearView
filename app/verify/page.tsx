@@ -284,7 +284,7 @@ export default function VerifyPage() {
      */
     const evaluateFaceQuality = (live: AnalyzeResponse, capture: FrameCapture, challenge?: ChallengeResponse | null) => {
         // Require backend liveness pass flag and reasonable confidence (loosened to reduce false negatives)
-        const confidenceOk = live.label === 'real' && live.passed !== false && live.confidence >= 0.9;
+        const confidenceOk = live.label === 'real' && live.passed !== false && live.confidence >= 0.95;
         if (!confidenceOk) {
             return { ok: false, reason: `Liveness failed (${live.confidence?.toFixed?.(3) ?? '0'})`, centerOk: null, sizeOk: null, lightOk: null, coverage: 0, offsetX: 0, offsetY: 0 };
         }
@@ -296,8 +296,8 @@ export default function VerifyPage() {
         }
 
         // Dynamic thresholds based on gesture target to better mirror the clearView facial analyzer
-        let minFaceCoverage = 0.08; // 8% of frame area (loosened for smaller framing)
-        let maxFaceCoverage = 0.4; // 40% of frame area (to prevent being too close)
+        let minFaceCoverage = 0.12; // stricter coverage
+        let maxFaceCoverage = 0.35;
 
         if (challenge?.gesture === 'move_closer') {
             maxFaceCoverage = 0.8; // user is instructed to approach camera
@@ -314,7 +314,7 @@ export default function VerifyPage() {
         const faceCenterY = box.y + box.h / 2;
         const cx = capture.width / 2;
         const cy = capture.height / 2;
-        const maxOffset = 0.35; // allow slight off-center framing
+        const maxOffset = 0.25;
         const offsetX = Math.abs(faceCenterX - cx) / capture.width;
         const offsetY = Math.abs(faceCenterY - cy) / capture.height;
 
