@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Camera, AlertCircle } from 'lucide-react';
 
 interface CameraPermissionHandlerProps {
@@ -16,34 +16,48 @@ export default function CameraPermissionHandler({
     'prompt' | 'granted' | 'denied' | 'checking'
   >('checking');
 
-  useEffect(() => {
-    checkCameraPermission();
-  }, []);
-
-  const checkCameraPermission = async () => {
+  const requestCameraAccess = useCallback(async () => {
     try {
-        // @ts-ignore navigator.permissions may not include camera in older types
-      if (!navigator.permissions) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      setPermissionState('granted');
+      onPermissionGranted();
+    } catch (error: unknown) {
+      console.error('Camera access denied:', error);
+      const err = error as { name?: string };
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        setPermissionState('denied');
+        onPermissionDenied();
+      } else {
+        setPermissionState('prompt');
+      }
+    }
+  }, [onPermissionDenied, onPermissionGranted]);
+
+  const checkCameraPermission = useCallback(async () => {
+    try {
+      const permissionsApi = (navigator as Navigator & { permissions?: Permissions }).permissions;
+      if (!permissionsApi) {
         await requestCameraAccess();
         return;
       }
 
-      // @ts-ignore
-      const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      
-      setPermissionState(result.state as any);
+      const result = await permissionsApi.query({ name: 'camera' as PermissionName }) as PermissionStatus;
+      const state = result.state as PermissionState;
+      setPermissionState(state);
 
-      if (result.state === 'granted') {
+      if (state === 'granted') {
         onPermissionGranted();
-      } else if (result.state === 'denied') {
+      } else if (state === 'denied') {
         onPermissionDenied();
       }
 
       result.addEventListener('change', () => {
-        setPermissionState(result.state as any);
-        if (result.state === 'granted') {
+        const nextState = result.state as PermissionState;
+        setPermissionState(nextState);
+        if (nextState === 'granted') {
           onPermissionGranted();
-        } else if (result.state === 'denied') {
+        } else if (nextState === 'denied') {
           onPermissionDenied();
         }
       });
@@ -51,24 +65,13 @@ export default function CameraPermissionHandler({
       console.error('Permission check failed:', error);
       setPermissionState('prompt');
     }
-  };
+  }, [onPermissionDenied, onPermissionGranted, requestCameraAccess]);
 
-  const requestCameraAccess = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop());
-      setPermissionState('granted');
-      onPermissionGranted();
-    } catch (error: any) {
-      console.error('Camera access denied:', error);
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        setPermissionState('denied');
-        onPermissionDenied();
-      } else {
-        setPermissionState('prompt');
-      }
-    }
-  };
+  useEffect(() => {
+    // Initial permission check on mount; state updates are intentional here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkCameraPermission();
+  }, [checkCameraPermission]);
 
   if (permissionState === 'checking') {
     return (

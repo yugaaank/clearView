@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Wifi, Check, X, Lock } from 'lucide-react';
+import { Wifi, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface StatusIndicatorProps {

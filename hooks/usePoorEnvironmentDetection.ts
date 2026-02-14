@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { AnalysisResponse } from '@/types/verification';
 
 interface EnvironmentIssue {
   type: 'lighting' | 'blur' | 'positioning' | 'multiple_faces';
@@ -13,7 +14,20 @@ export function usePoorEnvironmentDetection() {
   const [currentIssues, setCurrentIssues] = useState<EnvironmentIssue[]>([]);
   const issueCounters = useRef<Map<string, number>>(new Map());
 
-  const checkEnvironment = useCallback((analysisResponse: any) => {
+  function incrementIssueCounter(issueKey: string) {
+    const current = issueCounters.current.get(issueKey) || 0;
+    issueCounters.current.set(issueKey, current + 1);
+  }
+
+  function resetIssueCounter(issueKey: string) {
+    issueCounters.current.set(issueKey, 0);
+  }
+
+  function getIssueCount(issueKey: string): number {
+    return issueCounters.current.get(issueKey) || 0;
+  }
+
+  const checkEnvironment = useCallback((analysisResponse: AnalysisResponse) => {
     const checks = analysisResponse.checks;
     const newIssues: EnvironmentIssue[] = [];
 
@@ -61,19 +75,6 @@ export function usePoorEnvironmentDetection() {
 
     setCurrentIssues(newIssues);
   }, []);
-
-  const incrementIssueCounter = (issueKey: string) => {
-    const current = issueCounters.current.get(issueKey) || 0;
-    issueCounters.current.set(issueKey, current + 1);
-  };
-
-  const resetIssueCounter = (issueKey: string) => {
-    issueCounters.current.set(issueKey, 0);
-  };
-
-  const getIssueCount = (issueKey: string): number => {
-    return issueCounters.current.get(issueKey) || 0;
-  };
 
   const clearIssues = useCallback(() => {
     setCurrentIssues([]);

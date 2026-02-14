@@ -12,6 +12,7 @@ import ProgressTracker from '@/components/ProgressTracker';
 import { api, ChallengeResponse, AnalyzeResponse } from '@/lib/api';
 import { useVerificationProgress } from '@/hooks/useVerificationProgress';
 import { analytics } from '@/lib/analytics';
+import { AnalysisResponse } from '@/types/verification';
 
 export default function VerifyPage() {
     const router = useRouter();
@@ -123,7 +124,7 @@ export default function VerifyPage() {
                 setQuality({ center: quality.centerOk, size: quality.sizeOk, light: quality.lightOk });
 
                 // Feed progress tracker
-                const analysisPayload = {
+                const analysisPayload: AnalysisResponse = {
                     quality_passed: quality.ok,
                     checks: {
                         liveness: { passed: live.label === 'real' && live.passed !== false, confidence: live.confidence, score: live.confidence },
@@ -135,7 +136,6 @@ export default function VerifyPage() {
                     hints: quality.ok ? [] : [quality.reason],
                     ready_for_validation: quality.ok,
                 };
-                // @ts-expect-error minimal shape for hook
                 updateFromAnalysis(analysisPayload);
 
                 if (!quality.ok) {

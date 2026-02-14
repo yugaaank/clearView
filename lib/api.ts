@@ -3,15 +3,13 @@
 // Handles both HTTP (localhost) and HTTPS dev proxy (e.g., https://<ip>:3001).
 const getBaseUrl = () => {
   // Explicit override wins (set NEXT_PUBLIC_API_BASE="https://host:port")
-  const envBase = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_BASE)?.trim();
-  if (envBase) return envBase.replace(/\/$/, '');
+  const envBase = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_API_BASE : undefined;
+  const normalizedEnvBase = typeof envBase === 'string' ? envBase.trim() : '';
+  if (normalizedEnvBase) return normalizedEnvBase.replace(/\/$/, '');
 
   // Hard default to ngrok tunnel for deployments where env isn't set.
   const fallback = 'https://unstated-grimily-babette.ngrok-free.dev';
   if (typeof window !== 'undefined') return fallback;
-
-  const envProtocol = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_PROTOCOL)?.trim();
-  const envPort = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_PORT)?.trim();
 
   if (typeof window !== 'undefined') {
     // Prefer relative path to leverage Next.js rewrites and avoid mixed-content.
@@ -31,7 +29,7 @@ export interface ValidateResponse {
   success: boolean;
   message: string;
   token?: string;
-  results?: any;
+  results?: Record<string, unknown>;
 }
 
 export interface AnalyzeResponse {
@@ -76,14 +74,17 @@ export const api = {
       throw new Error('Failed to fetch challenge');
     }
 
-    const data = await response.json();
+    const data = await response.json() as unknown;
 
     // Normalize backend variants:
     // - legacy: {challenge_id, gesture, instruction}
     // - current: {challenge: {gesture,instruction}, challenge_id, ...}
-    const challenge = (data.challenge ?? data) as any;
+    type ChallengeShape = { challenge_id?: string; gesture: string; instruction: string };
+    type ResponseShape = { challenge?: ChallengeShape } & ChallengeShape;
+    const normalized = data as ResponseShape;
+    const challenge = normalized.challenge ?? normalized;
     return {
-      challenge_id: data.challenge_id ?? challenge.challenge_id ?? crypto.randomUUID(),
+      challenge_id: normalized.challenge_id ?? challenge.challenge_id ?? crypto.randomUUID(),
       gesture: challenge.gesture,
       instruction: challenge.instruction,
     };

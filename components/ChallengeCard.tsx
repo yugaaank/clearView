@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { PlayCircle, CheckCircle, Smartphone, User, RefreshCw, XCircle } from 'lucide-react';
+import { PlayCircle, Smartphone, User, RefreshCw } from 'lucide-react';
 
 interface ChallengeCardProps {
     instruction?: string;

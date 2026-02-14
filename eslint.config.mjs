@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Project-specific: ignore bundled Python virtualenv assets that contain JS files.
+    "python/venv/**",
+    "Silent-Face-Anti-Spoofing-master/venv/**",
   ]),
 ]);
 

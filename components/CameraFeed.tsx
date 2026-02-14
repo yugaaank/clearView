@@ -89,12 +89,15 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(({ onStreamRead
                     if (onStreamReady) onStreamReady(stream);
                 }
                 setError(null);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error("Error accessing camera:", err);
                 let errorMessage = "Camera access denied or unavailable.";
 
-                if (err.message) {
-                    errorMessage = err.message;
+                if (err && typeof err === 'object' && 'message' in err) {
+                    const maybeMessage = (err as { message?: unknown }).message;
+                    if (typeof maybeMessage === 'string') {
+                        errorMessage = maybeMessage;
+                    }
                 } else if (window.isSecureContext === false) {
                     errorMessage = "Camera requires HTTPS. Access https://<Your-IP>:3001";
                 }
@@ -103,12 +106,14 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(({ onStreamRead
             }
         }
 
+        const videoEl = videoRef.current;
+
         startCamera();
 
         return () => {
             // Cleanup stream
-            if (videoRef.current && videoRef.current.srcObject) {
-                const stream = videoRef.current.srcObject as MediaStream;
+            if (videoEl && videoEl.srcObject) {
+                const stream = videoEl.srcObject as MediaStream;
                 stream.getTracks().forEach(track => track.stop());
             }
         };
@@ -132,7 +137,7 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(({ onStreamRead
                         <div className="text-neon-red font-bold text-lg">Camera Error</div>
                         <p className="text-white/70 text-sm">{error}</p>
                         <p className="text-xs text-white/40 mt-2">
-                            Try using 'localhost' or ensure HTTPS is enabled.
+                            Try using &apos;localhost&apos; or ensure HTTPS is enabled.
                         </p>
                     </div>
                 </div>
