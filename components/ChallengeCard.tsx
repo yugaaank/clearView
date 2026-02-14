@@ -21,8 +21,8 @@ export default function ChallengeCard({ instruction, gesture, onStart, isLoading
         switch (ges) {
             case 'smile': return <User className="w-8 h-8 text-neon-green" />;
             case 'blink': return <User className="w-8 h-8 text-neon-blue" />;
-            case 'turn_left': return <User className="w-8 h-8 text-neon-purple" />;
-            case 'turn_right': return <User className="w-8 h-8 text-neon-purple" />;
+            case 'turn_left': return <User className="w-8 h-8 text-neon-cyan" />;
+            case 'turn_right': return <User className="w-8 h-8 text-neon-cyan" />;
             case 'nod': return <User className="w-8 h-8 text-neon-blue" />;
             default: return <User className="w-8 h-8 text-muted-foreground" />;
         }
@@ -66,7 +66,7 @@ export default function ChallengeCard({ instruction, gesture, onStart, isLoading
                             <button
                                 onClick={onStart}
                                 disabled={isLoading}
-                                className="w-full py-3 px-6 rounded-lg bg-gradient-to-r from-neon-blue to-neon-purple font-bold text-white shadow-lg hover:shadow-neon-blue/50 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
+                                className="w-full py-3 px-6 rounded-lg bg-gradient-to-r from-neon-blue to-neon-cyan font-bold text-white shadow-lg hover:shadow-neon-blue/50 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
                             >
                                 {isLoading ? (
                                     <RefreshCw className="w-5 h-5 animate-spin" />
@@ -95,21 +95,21 @@ export default function ChallengeCard({ instruction, gesture, onStart, isLoading
                                 key={gesture}
                                 className="mb-2"
                             >
-                        {getIcon(gesture || '')}
-                    </motion.div>
-                    <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                        {instruction}
-                    </h2>
-                    <div className="flex flex-wrap gap-2 justify-center w-full">
-                        {renderIndicator('Center', quality?.center)}
-                        {renderIndicator('Distance', quality?.size)}
-                        {renderIndicator('Lighting', quality?.light)}
-                    </div>
-                    <div className="w-full bg-gray-800/50 h-1.5 rounded-full overflow-hidden mt-4">
-                        <motion.div
-                            className="h-full bg-neon-green shadow-[0_0_10px_var(--neon-green)]"
-                            initial={{ width: "0%" }}
-                            animate={{ width: "100%" }}
+                                {getIcon(gesture || '')}
+                            </motion.div>
+                            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+                                {instruction}
+                            </h2>
+                            <div className="flex flex-wrap gap-2 justify-center w-full">
+                                {renderIndicator('Center', quality?.center)}
+                                {renderIndicator('Distance', quality?.size)}
+                                {renderIndicator('Lighting', quality?.light)}
+                            </div>
+                            <div className="w-full bg-gray-800/50 h-1.5 rounded-full overflow-hidden mt-4">
+                                <motion.div
+                                    className="h-full bg-neon-green shadow-[0_0_10px_var(--neon-green)]"
+                                    initial={{ width: "0%" }}
+                                    animate={{ width: "100%" }}
                                     transition={{ duration: 4, ease: "linear" }}
                                 />
                             </div>

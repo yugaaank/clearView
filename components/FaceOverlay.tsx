@@ -19,7 +19,7 @@ export default function FaceOverlay({ status }: FaceOverlayProps) {
                     <defs>
                         <linearGradient id="scan-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                             <stop offset="0%" stopColor="var(--neon-blue)" stopOpacity="0.8" />
-                            <stop offset="100%" stopColor="var(--neon-purple)" stopOpacity="0.8" />
+                            <stop offset="100%" stopColor="var(--neon-cyan)" stopOpacity="0.8" />
                         </linearGradient>
                         <filter id="glow">
                             <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
@@ -91,7 +91,7 @@ export default function FaceOverlay({ status }: FaceOverlayProps) {
                     transition={{ duration: 2, repeat: Infinity }}
                 />
                 <motion.div
-                    className="w-[500px] h-[500px] border border-neon-purple rounded-full absolute"
+                    className="w-[500px] h-[500px] border border-neon-cyan rounded-full absolute"
                     animate={{ scale: [1, 1.1], opacity: [0.3, 0] }}
                     transition={{ duration: 2, delay: 1, repeat: Infinity }}
                 />

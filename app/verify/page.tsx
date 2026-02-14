@@ -94,8 +94,8 @@ export default function VerifyPage() {
 
         const maxAttempts = 40;
         const intervalMs = 600;
-        const minSamples = 10;   // minimum frames to average
-        const maxSamples = 15;   // cap to avoid long waits
+        const minSamples = 5;   // minimum frames to average
+        const maxSamples = 10;   // cap to avoid long waits
         const samples: { confidence: number; capture: FrameCapture }[] = [];
         let bestCapture: { confidence: number; capture: FrameCapture } | null = null;
         let streak = 0;
