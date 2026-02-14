@@ -71,168 +71,168 @@ export default function VerifyPage() {
     }, [countdown, decrementTime]);
 
     const startVerification = async () => {
-        let timerId: number | null = null;
-
         try {
-            // Clear any stale verification artifacts before beginning.
             clearTokenArtifacts();
             setProcessing(true);
             setStatus('scanning');
-            setMessage('Fetching remote challenge...');
             setQuality({ center: null, size: null, light: null });
             setPhase('scanning');
             startAttempt(1);
 
-            const chal = await api.getChallenge();
-            setChallenge(chal);
-            setCountdown(60);
-            analytics.startSession(chal.challenge_id);
-            analytics.track('verification_started', { challenge: chal.challenge_id });
+            // 1) Require 5 consecutive good frames before moving on
+            setChallenge({ challenge_id: 'local-base', gesture: 'frontal', instruction: 'Look at camera' });
+            setMessage('Hold steady for 5 good frames');
+            const baseOk = await waitForQualityStreak(5);
+            if (!baseOk) return failAndReset('Could not confirm a clear view. Try again.');
 
-            // countdown timer for 60s challenge expiry
-            const start = Date.now();
-            timerId = window.setInterval(() => {
-                const elapsed = Math.floor((Date.now() - start) / 1000);
-                const remaining = 60 - elapsed;
-                setCountdown(Math.max(remaining, 0));
-                if (remaining <= 0 && timerId) {
-                    clearInterval(timerId);
-                }
-            }, 1000);
+            // 2) Look left for 5s
+            setChallenge({ challenge_id: 'local-left', gesture: 'turn_left', instruction: 'Look left' });
+            setMessage('Look left and hold for 5s');
+            const leftOk = await waitForPoseHold('turn_left', 'Look left', 5000);
+            if (!leftOk) return failAndReset('Could not confirm left look. Try again.');
 
-            await captureUntilValid(chal);
+            // 3) Look right for 5s
+            setChallenge({ challenge_id: 'local-right', gesture: 'turn_right', instruction: 'Look right' });
+            setMessage('Look right and hold for 5s');
+            const rightOk = await waitForPoseHold('turn_right', 'Look right', 5000);
+            if (!rightOk) return failAndReset('Could not confirm right look. Try again.');
+
+            // 4) Voice step (5s recording)
+            setStatus('voice');
+            setMessage('Face verified. Please speak: "My voice is my password"');
+            setProcessing(false);
+            setCountdown(null);
+            await captureVoiceThenValidate();
         } catch (err) {
             console.error(err);
-            setConnectionStatus('error');
-            setProcessing(false);
-            setMessage('Failed to connect to secure server.');
-        } finally {
-            if (timerId) clearInterval(timerId);
-            timerId = null;
+            failAndReset('Verification failed. Please retry.');
         }
     };
 
-    const captureUntilValid = async (chal: ChallengeResponse) => {
-        if (!cameraRef.current) return;
+    const failAndReset = (msg: string) => {
+        setStatus('fail');
+        setProcessing(false);
+        setMessage(msg);
+        setTimeout(() => setStatus('idle'), 2000);
+        return false;
+    };
 
-        const maxAttempts = 40;
-        const intervalMs = 600;
-        const minSamples = 5;   // minimum frames to average
-        const maxSamples = 10;   // cap to avoid long waits
-        const samples: { confidence: number; capture: FrameCapture }[] = [];
-        let bestCapture: { confidence: number; capture: FrameCapture } | null = null;
+    /**
+     * Wait for N consecutive frames that satisfy quality/liveness.
+     */
+    const waitForQualityStreak = async (requiredStreak: number) => {
+        const maxAttempts = 120;
         let streak = 0;
-
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const capture = cameraRef.current.captureFrame();
+            const capture = cameraRef.current?.captureFrame();
             if (!capture) {
-                setStatus('scanning');
-                setMessage('Camera warming up... hold steady.');
-                await new Promise(res => setTimeout(res, 400));
+                setMessage('Camera warming up...');
+                await new Promise(res => setTimeout(res, 250));
                 continue;
             }
 
             try {
                 const live = await api.analyzeFrame(capture.dataUrl);
-
-                // Handle backend validation feedback (e.g., missing face) without throwing.
                 if (live.label === 'error') {
-                    setStatus('scanning');
-                    setMessage(live.error || 'Frame rejected, adjust and hold steady.');
-                    await new Promise(res => setTimeout(res, 400));
+                    streak = 0;
+                    setMessage(live.error || 'Adjust and hold steady.');
+                    await new Promise(res => setTimeout(res, 250));
                     continue;
                 }
 
-                const quality = evaluateFaceQuality(live, capture);
+                const quality = evaluateFaceQuality(live, capture, { challenge_id: 'local', gesture: 'frontal', instruction: 'Look at camera' });
                 setQuality({ center: quality.centerOk, size: quality.sizeOk, light: quality.lightOk });
+                updateProgressFromLive(live, capture, quality);
 
-                // Feed progress tracker
-                const analysisPayload: AnalysisResponse = {
-                    quality_passed: quality.ok,
-                    checks: {
-                        liveness: { passed: live.label === 'real' && live.passed !== false, confidence: live.confidence, score: live.confidence },
-                        face_detection: { passed: !!live.bbox, bbox: live.bbox ? [live.bbox.x, live.bbox.y, live.bbox.w, live.bbox.h] : [], area_pct: quality.coverage * 100 },
-                        positioning: { passed: !!quality.centerOk, center_offset_x: quality.offsetX, center_offset_y: quality.offsetY },
-                        image_quality: { passed: !!quality.lightOk, brightness: capture.brightness, blur: 0, contrast: 0 },
-                        gesture_ready: { passed: quality.ok, baseline_set: quality.ok },
-                    },
-                    hints: quality.ok ? [] : [quality.reason],
-                    ready_for_validation: quality.ok,
-                };
-                updateFromAnalysis(analysisPayload);
-
-                if (!quality.ok) {
-                    // Break streak and reset accumulated samples if quality drops
-                    if (samples.length > 0 || streak > 0) {
-                        samples.length = 0;
-                        bestCapture = null;
-                        streak = 0;
-                        setMessage(`Quality lost: ${quality.reason}. Restarting capture window.`);
-                    } else {
-                        setStatus('scanning');
-                        setMessage(`${quality.reason} (${attempt}/${maxAttempts})`);
+                if (quality.ok) {
+                    streak += 1;
+                    setMessage(`Hold steady (${streak}/${requiredStreak})`);
+                    if (streak >= requiredStreak) {
+                        setMessage('Face confirmed.');
+                        return true;
                     }
                 } else {
-                    // Collect good samples for averaging
-                    streak += 1;
-                    samples.push({ confidence: live.confidence, capture });
-                    if (!bestCapture || live.confidence > bestCapture.confidence) {
-                        bestCapture = { confidence: live.confidence, capture };
-                    }
-
-                    setStatus('scanning');
-                    setMessage(`Quality OK ${samples.length}/${minSamples} (avg ${(
-                        samples.reduce((a, b) => a + b.confidence, 0) / samples.length
-                    ).toFixed(3)})`);
-
-                    // Once we have enough samples (or hit cap), submit using best frame
-                    if (samples.length >= minSamples || samples.length >= maxSamples) {
-                        const avgConfidence = samples.reduce((a, b) => a + b.confidence, 0) / samples.length;
-                        setMessage(`Submitting after ${samples.length} samples (avg ${avgConfidence.toFixed(3)})...`);
-                        const frameToSend = bestCapture?.capture ?? capture;
-                        const result = await api.validateChallenge(chal.challenge_id, chal.gesture, frameToSend.dataUrl);
-                        if (result.success) {
-                            // Proceed to voice verification step
-                            setStatus('voice');
-                            setMessage('Face verified. Please speak: "My voice is my password"');
-                            setProcessing(false);
-                            setCountdown(null);
-                            await captureVoiceThenValidate();
-                            return;
-                        } else {
-                            setStatus('fail');
-                            setProcessing(false);
-                            setMessage(result.message || 'Verification failed.');
-                            setTimeout(() => {
-                                setStatus('idle');
-                                setChallenge(null);
-                                setMessage('');
-                                setCountdown(null);
-                                setQuality({ center: null, size: null, light: null });
-                            }, 2000);
-                            return;
-                        }
-                    }
+                    streak = 0;
+                    setMessage(quality.reason);
                 }
             } catch (err) {
-                console.error(err);
-                setStatus('fail');
-                            setMessage('Validation error. Retrying...');
+                console.warn('Quality streak check failed', err);
+                streak = 0;
+                setMessage('Hold still...');
+            }
+
+            await new Promise(res => setTimeout(res, 300));
+        }
+        return false;
+    };
+
+    /**
+     * Require holding a pose for the given duration (ms) with continuous valid frames.
+     */
+    const waitForPoseHold = async (targetPose: 'turn_left' | 'turn_right', instruction: string, holdMs: number) => {
+        const maxAttempts = 200;
+        let holdStart: number | null = null;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const capture = cameraRef.current?.captureFrame();
+            if (!capture) {
+                setMessage('Camera warming up...');
+                await new Promise(res => setTimeout(res, 250));
+                continue;
+            }
+
+            try {
+                const live = await api.analyzeFrame(capture.dataUrl);
+                if (live.label === 'error') {
+                    holdStart = null;
+                    setMessage(live.error || `${instruction} (recenter)`);
+                    await new Promise(res => setTimeout(res, 250));
+                    continue;
                 }
 
-            await new Promise(res => setTimeout(res, intervalMs));
-        }
+                const pose = (live as any).pose;
+                const poseMatches = pose ? pose === targetPose : live.label === 'real';
+                const quality = evaluateFaceQuality(live, capture, { challenge_id: 'local', gesture: targetPose, instruction });
+                setQuality({ center: quality.centerOk, size: quality.sizeOk, light: quality.lightOk });
+                updateProgressFromLive(live, capture, quality);
 
-        setStatus('fail');
-        setProcessing(false);
-        setMessage('Verification timeout. Try again.');
-        setTimeout(() => {
-            setStatus('idle');
-            setChallenge(null);
-            setMessage('');
-            setCountdown(null);
-            setQuality({ center: null, size: null, light: null });
-        }, 2000);
+                if (poseMatches && quality.ok) {
+                    if (!holdStart) holdStart = Date.now();
+                    const elapsed = Date.now() - holdStart;
+                    const remaining = Math.max(0, holdMs - elapsed);
+                    setMessage(`${instruction} — hold ${(elapsed / 1000).toFixed(1)}s / ${(holdMs / 1000).toFixed(0)}s`);
+                    if (elapsed >= holdMs) {
+                        setMessage(`${instruction} confirmed.`);
+                        return true;
+                    }
+                } else {
+                    holdStart = null;
+                    setMessage(`${instruction} (${attempt}/${maxAttempts})`);
+                }
+            } catch (err) {
+                console.warn('Pose hold failed', err);
+                holdStart = null;
+                setMessage('Hold still...');
+            }
+
+            await new Promise(res => setTimeout(res, 300));
+        }
+        return false;
+    };
+
+    const updateProgressFromLive = (live: AnalyzeResponse, capture: FrameCapture, quality: ReturnType<typeof evaluateFaceQuality>) => {
+        updateFromAnalysis({
+            quality_passed: quality.ok,
+            checks: {
+                liveness: { passed: live.label === 'real' && live.passed !== false, confidence: live.confidence, score: live.confidence },
+                face_detection: { passed: !!live.bbox, bbox: live.bbox ? [live.bbox.x, live.bbox.y, live.bbox.w, live.bbox.h] : [], area_pct: quality.coverage * 100 },
+                positioning: { passed: !!quality.centerOk, center_offset_x: quality.offsetX, center_offset_y: quality.offsetY },
+                image_quality: { passed: !!quality.lightOk, brightness: capture.brightness, blur: 0, contrast: 0 },
+                gesture_ready: { passed: quality.ok, baseline_set: quality.ok },
+            },
+            hints: quality.ok ? [] : [quality.reason],
+            ready_for_validation: quality.ok,
+        });
     };
 
     /**
@@ -336,7 +336,7 @@ export default function VerifyPage() {
 
             mediaRecorder.start();
             setVoiceMessage('Recording... please say: "My voice is my password"');
-            await new Promise(res => setTimeout(res, 2500));
+            await new Promise(res => setTimeout(res, 5000));
             mediaRecorder.stop();
 
             const recordedBlob = await stopPromise;
