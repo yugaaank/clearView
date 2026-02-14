@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:https": "local-ssl-proxy --source 3001 --target 3000 & next dev",
+    "dev:https": "local-ssl-proxy --source 3001 --target 3000 --cert localhost.pem --key localhost-key.pem & next dev",
+    "setup:https": "node scripts/setup-https.js",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

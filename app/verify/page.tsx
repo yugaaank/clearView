@@ -14,6 +14,22 @@ import { useVerificationProgress } from '@/hooks/useVerificationProgress';
 import { analytics } from '@/lib/analytics';
 import { AnalysisResponse } from '@/types/verification';
 
+const TOKEN_STORAGE_KEY = 'verified_session_token';
+const TOKEN_TIME_KEY = 'verified_at';
+
+const generateSessionToken = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+        return `poLife_${crypto.randomUUID()}`;
+    }
+    return `poLife_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+};
+
+const clearTokenArtifacts = () => {
+    if (typeof window === 'undefined') return;
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(TOKEN_TIME_KEY);
+};
+
 export default function VerifyPage() {
     const router = useRouter();
     const cameraRef = useRef<CameraFeedHandle>(null);
@@ -58,6 +74,8 @@ export default function VerifyPage() {
         let timerId: number | null = null;
 
         try {
+            // Clear any stale verification artifacts before beginning.
+            clearTokenArtifacts();
             setProcessing(true);
             setStatus('scanning');
             setMessage('Fetching remote challenge...');
@@ -220,7 +238,7 @@ export default function VerifyPage() {
     /**
      * Evaluate frame beyond streak counting: full face presence, reasonable size, centered, and liveness score.
      */
-    const evaluateFaceQuality = (live: AnalyzeResponse, capture: FrameCapture) => {
+    const evaluateFaceQuality = (live: AnalyzeResponse, capture: FrameCapture, challenge?: ChallengeResponse | null) => {
         // Require backend liveness pass flag and reasonable confidence (loosened to reduce false negatives)
         const confidenceOk = live.label === 'real' && live.passed !== false && live.confidence >= 0.9;
         if (!confidenceOk) {
@@ -233,8 +251,16 @@ export default function VerifyPage() {
             return { ok: false, reason: 'Face not detected. Move closer.', centerOk: false, sizeOk: false, lightOk: evaluateLighting(capture), coverage: 0, offsetX: 0, offsetY: 0 };
         }
 
-        const minFaceCoverage = 0.08; // 8% of frame area (loosened for smaller framing)
-        const maxFaceCoverage = 0.4; // 40% of frame area (to prevent being too close)
+        // Dynamic thresholds based on gesture target to better mirror the clearView facial analyzer
+        let minFaceCoverage = 0.08; // 8% of frame area (loosened for smaller framing)
+        let maxFaceCoverage = 0.4; // 40% of frame area (to prevent being too close)
+
+        if (challenge?.gesture === 'move_closer') {
+            maxFaceCoverage = 0.8; // user is instructed to approach camera
+        } else if (challenge?.gesture === 'move_farther') {
+            minFaceCoverage = 0.01; // allow the face to be much smaller in frame
+        }
+
         const coverage = (box.w * box.h) / (capture.width * capture.height);
         const sizeOk = coverage >= minFaceCoverage;
         const isTooClose = coverage > maxFaceCoverage;
@@ -247,7 +273,10 @@ export default function VerifyPage() {
         const maxOffset = 0.35; // allow slight off-center framing
         const offsetX = Math.abs(faceCenterX - cx) / capture.width;
         const offsetY = Math.abs(faceCenterY - cy) / capture.height;
-        const centerOk = offsetX <= maxOffset && offsetY <= maxOffset;
+
+        // When gesture requires head movement we relax horizontal centering
+        const gestureActive = !!(challenge?.gesture && challenge.gesture !== 'none');
+        const centerOk = (offsetX <= maxOffset || gestureActive) && offsetY <= maxOffset;
 
         const lightOk = evaluateLighting(capture);
 
@@ -315,6 +344,11 @@ export default function VerifyPage() {
             setVoiceMessage('Analyzing voice...');
 
             // Simple mic check: any response is treated as verified.
+            const newToken = generateSessionToken();
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem(TOKEN_STORAGE_KEY, newToken);
+                sessionStorage.setItem(TOKEN_TIME_KEY, new Date().toISOString());
+            }
             setVoiceMessage('Voice verified.');
             setStatus('success');
             setTimeout(() => router.push('/success'), 1200);
