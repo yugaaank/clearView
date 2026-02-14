@@ -3,7 +3,8 @@
 import { motion } from 'framer-motion';
 
 interface FaceOverlayProps {
-    status: 'idle' | 'scanning' | 'success' | 'fail';
+    // include 'voice' to allow overlay reuse during the voice step
+    status: 'idle' | 'scanning' | 'success' | 'fail' | 'voice';
 }
 
 export default function FaceOverlay({ status }: FaceOverlayProps) {
