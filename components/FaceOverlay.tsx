@@ -45,11 +45,12 @@ export default function FaceOverlay({ status }: FaceOverlayProps) {
                         strokeDasharray="4 4"
                         animate={{
                             strokeDashoffset: [0, 20],
-                            filter: isScanning ? ["url(#glow)", "none"] : "none"
+                            strokeOpacity: isScanning ? [1, 0.5, 1] : 1,
+                            filter: "url(#glow)"
                         }}
                         transition={{
                             strokeDashoffset: { duration: 1, repeat: Infinity, ease: "linear" },
-                            filter: { duration: 0.5, repeat: Infinity, repeatType: "reverse" }
+                            strokeOpacity: { duration: 2, repeat: Infinity, ease: "easeInOut" }
                         }}
                     />
                 </svg>
@@ -61,7 +62,7 @@ export default function FaceOverlay({ status }: FaceOverlayProps) {
                         initial={{ top: "10%" }}
                         animate={{ top: "90%" }}
                         transition={{
-                            duration: 1.5,
+                            duration: 2.5,
                             repeat: Infinity,
                             repeatType: "reverse",
                             ease: "linear"

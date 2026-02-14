@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import CameraFeed, { CameraFeedHandle, FrameCapture } from '@/components/CameraFeed';
@@ -263,6 +263,11 @@ export default function VerifyPage() {
         return brightness >= min && brightness <= max;
     };
 
+
+    const handleStreamReady = useCallback(() => {
+        setFeedReady(true);
+    }, []);
+
     if (!cameraAllowed) {
         return (
             <main className="min-h-screen flex items-center justify-center bg-black text-white p-4">
@@ -279,6 +284,8 @@ export default function VerifyPage() {
         );
     }
 
+
+
     return (
         <main className="fixed inset-0 bg-black text-white overflow-hidden flex flex-col">
             {/* Header */}
@@ -290,7 +297,7 @@ export default function VerifyPage() {
             <div className="relative flex-1 w-full h-full">
                 <CameraFeed
                     ref={cameraRef}
-                    onStreamReady={() => setFeedReady(true)}
+                    onStreamReady={handleStreamReady}
                     className="w-full h-full"
                 />
 
