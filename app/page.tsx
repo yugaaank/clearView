@@ -10,7 +10,6 @@ import {
   Fingerprint,
   Activity,
   Sparkles,
-  Smartphone,
 } from 'lucide-react';
 
 export default function Home() {
@@ -18,8 +17,8 @@ export default function Home() {
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-32 top-10 h-80 w-80 rounded-full bg-neon-blue/20 blur-[120px]" />
-        <div className="absolute -right-24 bottom-10 h-96 w-96 rounded-full bg-neon-cyan/15 blur-[140px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),transparent_45%),linear-gradient(120deg,rgba(255,255,255,0.04)_0%,transparent_30%,transparent_70%,rgba(255,255,255,0.08)_100%)]" />
+        <div className="absolute -right-24 bottom-10 h-96 w-96 rounded-full bg-neon-cyan/20 blur-[140px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.03),transparent_45%),linear-gradient(120deg,rgba(255,255,255,0.03)_0%,transparent_30%,transparent_70%,rgba(255,255,255,0.08)_100%)]" />
       </div>
 
       <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-14 sm:px-6 lg:px-8 lg:pt-20">
@@ -42,10 +41,10 @@ export default function Home() {
               className="space-y-4"
             >
               <h1 className="text-4xl font-bold leading-tight sm:text-5xl lg:text-6xl">
-                Proof of life, built for fast onboarding.
+                Login dashboard with one-time session verification.
               </h1>
               <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
-                Verify real humans in under 10 seconds with gesture-driven liveness, anti-spoofing, and secure voice fallback. Designed for regulated teams that need confidence without friction.
+                Launch users straight into their dashboard after a quick face check. Each session gets a unique token that powers a fresh, personalized view.
               </p>
             </motion.div>
 
@@ -58,20 +57,13 @@ export default function Home() {
               <Link href="/verify" className="group w-full sm:w-auto">
                 <span className="relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-neon-blue via-neon-cyan to-neon-blue px-6 py-3 text-sm font-semibold text-black shadow-[0_10px_40px_rgba(79,209,255,0.35)] transition duration-200 ease-out hover:scale-[1.01]">
                   <ScanFace className="h-4 w-4" />
-                  Start Verification
+                  Start verification
                   <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                 </span>
               </Link>
-              <Link
-                href="/voice"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:border-neon-blue/40 hover:bg-white/10 sm:w-auto"
-              >
-                <Smartphone className="h-4 w-4" />
-                Voice Mode Demo
-              </Link>
-              <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-transparent px-6 py-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground sm:w-auto">
+              <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-muted-foreground transition hover:text-white sm:w-auto">
                 <Lock className="h-4 w-4" />
-                Security brief
+                Session security
               </button>
             </motion.div>
 
@@ -122,70 +114,49 @@ export default function Home() {
               </div>
 
               <div className="space-y-6 px-5 py-5">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[{
-                    title: 'Camera ready',
-                    icon: Sparkles,
-                    tone: 'text-neon-blue',
-                    bg: 'bg-neon-blue/10',
-                  }, {
-                    title: 'Signal strong',
-                    icon: Activity,
-                    tone: 'text-green-300',
-                    bg: 'bg-green-400/10',
-                  }].map((item) => (
-                    <div
-                      key={item.title}
-                      className={`flex items-center gap-3 rounded-2xl ${item.bg} border border-white/5 px-3 py-3 text-sm`}
-                    >
-                      <item.icon className={`h-4 w-4 ${item.tone}`} />
-                      <span className="font-medium">{item.title}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Depth + IR</span>
-                    <span>Anti-spoof active</span>
-                  </div>
-                  <div className="mt-3 h-40 rounded-xl bg-[radial-gradient(circle_at_20%_20%,rgba(79,209,255,0.25),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(165,243,252,0.22),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(0,0,0,0.2))] border border-white/5" />
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-white shadow-sm">
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Suggested for faster pass</p>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-center gap-2 text-muted-foreground"><Sparkles className="h-4 w-4 text-neon-blue" />Face the window or soft light.</li>
+                    <li className="flex items-center gap-2 text-muted-foreground"><Activity className="h-4 w-4 text-emerald-400" />Keep head centered in the frame.</li>
+                    <li className="flex items-center gap-2 text-muted-foreground"><Fingerprint className="h-4 w-4 text-neon-cyan" />Remove hats/glare; keep camera steady.</li>
+                  </ul>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   {[{
-                    title: 'Blink + turn',
-                    desc: 'Tracking 62 key points',
-                    icon: Fingerprint,
-                  }, {
-                    title: 'Unique phrase',
-                    desc: 'Dynamic challenge',
+                    title: 'One-time token',
+                    desc: 'Session-bound, expires on logout.',
                     icon: Lock,
                   }, {
-                    title: 'Tamper proof',
-                    desc: 'Signed attestation',
+                    title: 'Attested',
+                    desc: 'Signed with device proof.',
                     icon: ShieldCheck,
+                  }, {
+                    title: 'Fast path',
+                    desc: '<10s median verification.',
+                    icon: Fingerprint,
                   }].map((item) => (
-                    <div key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm">
+                    <div key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white">
                       <div className="mb-2 flex items-center gap-2 text-neon-blue">
                         <item.icon className="h-4 w-4" />
-                        <span className="font-semibold text-foreground">{item.title}</span>
+                        <span className="font-semibold text-white">{item.title}</span>
                       </div>
                       <p className="text-muted-foreground">{item.desc}</p>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-gradient-to-r from-white/5 via-white/0 to-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-1">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Step 2 of 3</p>
-                    <p className="text-sm font-semibold">Say the prompted phrase to finish</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Session preview</p>
+                    <p className="text-sm font-semibold text-white">Unique dashboard starts after verification</p>
                   </div>
                   <div className="flex w-full items-center gap-3 sm:w-auto">
                     <div className="h-2 flex-1 rounded-full bg-white/10">
                       <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-neon-blue to-neon-cyan" />
                     </div>
-                    <span className="text-xs text-muted-foreground">68%</span>
+                    <span className="text-xs text-muted-foreground">Ready</span>
                   </div>
                 </div>
               </div>
@@ -217,10 +188,6 @@ export default function Home() {
               title: 'Active liveness',
               desc: 'Randomized gestures, blink checks, and depth mapping stop replay attacks before they start.',
               icon: Fingerprint,
-            }, {
-              title: 'Voice fallback',
-              desc: 'Phone-first customers can verify with a short spoken phrase that rotates per attempt.',
-              icon: Smartphone,
             }, {
               title: 'Enterprise-grade',
               desc: 'SOC2-ready auditing, regional routing, and signed attestations for every session.',

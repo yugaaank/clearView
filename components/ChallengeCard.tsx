@@ -14,9 +14,11 @@ interface ChallengeCardProps {
         size: boolean | null;
         light: boolean | null;
     };
+    status?: 'idle' | 'scanning' | 'voice' | 'success' | 'fail';
+    tips?: string[];
 }
 
-export default function ChallengeCard({ instruction, gesture, onStart, isLoading, countdown, quality }: ChallengeCardProps) {
+export default function ChallengeCard({ instruction, gesture, onStart, isLoading, countdown, quality, status, tips }: ChallengeCardProps) {
     const getIcon = (ges: string) => {
         switch (ges) {
             case 'smile': return <User className="w-8 h-8 text-neon-green" />;
@@ -61,8 +63,18 @@ export default function ChallengeCard({ instruction, gesture, onStart, isLoading
                             </div>
                             <h3 className="text-xl font-bold text-white tracking-wider">IDENTITY VERIFICATION</h3>
                             <p className="text-sm text-gray-400">
-                                Position your face in the oval and follow the gesture instructions.
+                                Position your face in the oval. Quick tips for a faster pass:
                             </p>
+                            {tips && tips.length > 0 && (
+                                <ul className="text-left text-xs text-gray-400 space-y-1 w-full">
+                                    {tips.map((tip) => (
+                                        <li key={tip} className="flex items-start gap-2">
+                                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neon-blue" />
+                                            <span>{tip}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                             <button
                                 onClick={onStart}
                                 disabled={isLoading}
@@ -76,6 +88,21 @@ export default function ChallengeCard({ instruction, gesture, onStart, isLoading
                                         <span>BEGIN SCAN</span>
                                     </>
                                 )}
+                            </button>
+                        </>
+                    ) : status === 'fail' ? (
+                        // Failure state overlay when liveness fails mid-run
+                        <>
+                            <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center mb-2">
+                                <RefreshCw className="w-6 h-6 text-red-300 animate-pulse" />
+                            </div>
+                            <h3 className="text-xl font-bold text-red-100 tracking-wider">LIVENESS FAILED</h3>
+                            <p className="text-sm text-red-100/80">Spoof or mismatched face detected. Restart to try again.</p>
+                            <button
+                                onClick={onStart}
+                                className="w-full py-3 px-6 rounded-lg border border-red-400/60 text-red-100 font-semibold hover:bg-red-500/10 transition-colors"
+                            >
+                                Restart verification
                             </button>
                         </>
                     ) : (

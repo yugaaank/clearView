@@ -47,12 +47,10 @@ export default function VerifyPage() {
     const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
     const [selectedMicId, setSelectedMicId] = useState<string | 'default'>('default');
     const [baselineCx, setBaselineCx] = useState<number | null>(null); // face center baseline from frontal pass
-    const actionPrompts = [
-        'Give me a quick smile then a frown.',
-        'Nod up and down twice.',
-        'Shake your head left and right.',
-        'Raise your eyebrows, then relax.',
-        'Lean closer, then back to center.',
+    const tips = [
+        'Face a soft light source for fewer shadows.',
+        'Center your face; keep shoulders visible.',
+        'Remove glasses glare or hats if possible.',
     ];
     const [countdown, setCountdown] = useState<number | null>(null);
     const [quality, setQuality] = useState<{ center: boolean | null; size: boolean | null; light: boolean | null }>({
@@ -93,14 +91,7 @@ export default function VerifyPage() {
             const baseOk = await waitForQualityStreak(5);
             if (!baseOk) return failAndReset('Could not confirm a clear view. Try again.');
 
-            // 2) Show all prompts (no verification) to guide user through movements
-            for (const prompt of actionPrompts) {
-                setChallenge({ challenge_id: 'local-prompt', gesture: 'none', instruction: prompt });
-                setMessage(prompt);
-                await new Promise(res => setTimeout(res, 3000));
-            }
-
-            // 3) Voice step (5s recording)
+            // 2) Voice step (5s recording)
             setStatus('voice');
             setMessage('Face verified. Please speak: "My voice is my password"');
             setProcessing(false);
@@ -492,6 +483,8 @@ export default function VerifyPage() {
                         onStart={startVerification}
                         countdown={countdown}
                         quality={quality}
+                        status={status}
+                        tips={tips}
                     />
 
                     {status === 'scanning' && (
