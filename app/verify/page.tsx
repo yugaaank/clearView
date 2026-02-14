@@ -228,8 +228,10 @@ export default function VerifyPage() {
         }
 
         const minFaceCoverage = 0.08; // 8% of frame area (loosened for smaller framing)
+        const maxFaceCoverage = 0.4; // 40% of frame area (to prevent being too close)
         const coverage = (box.w * box.h) / (capture.width * capture.height);
         const sizeOk = coverage >= minFaceCoverage;
+        const isTooClose = coverage > maxFaceCoverage;
 
         // Position: keep face roughly centered
         const faceCenterX = box.x + box.w / 2;
@@ -243,14 +245,17 @@ export default function VerifyPage() {
 
         const lightOk = evaluateLighting(capture);
 
+        if (isTooClose) {
+            return { ok: false, reason: 'Move back, too close.', centerOk, sizeOk, lightOk, coverage, offsetX, offsetY };
+        }
         if (!sizeOk) {
-            return { ok: false, reason: 'Move closer to fill the frame.', centerOk, sizeOk, lightOk, coverage, offsetX, offsetY };
+            return { ok: false, reason: 'Move closer.', centerOk, sizeOk, lightOk, coverage, offsetX, offsetY };
         }
         if (!centerOk) {
-            return { ok: false, reason: 'Center your face in the frame.', centerOk, sizeOk, lightOk, coverage, offsetX, offsetY };
+            return { ok: false, reason: 'Center your face.', centerOk, sizeOk, lightOk, coverage, offsetX, offsetY };
         }
         if (!lightOk) {
-            return { ok: false, reason: 'Improve lighting (too dark/bright).', centerOk, sizeOk, lightOk, coverage, offsetX, offsetY };
+            return { ok: false, reason: 'Adjust lighting.', centerOk, sizeOk, lightOk, coverage, offsetX, offsetY };
         }
 
         return { ok: true, reason: 'Face quality sufficient', centerOk, sizeOk, lightOk, coverage, offsetX, offsetY };
