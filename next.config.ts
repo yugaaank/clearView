@@ -12,12 +12,11 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
-    const apiHost = process.env.API_HOST || "10.16.227.242";
-    const apiPort = process.env.API_PORT || "8000";
-    const target = `http://${apiHost}:${apiPort}`;
+    // Default all API traffic (including /analyze) to the ngrok tunnel unless overridden.
+    const apiBase = process.env.API_BASE || "https://unstated-grimily-babette.ngrok-free.dev";
     return [
-      { source: "/api/:path*", destination: `${target}/api/:path*` },
-      { source: "/analyze", destination: `${target}/analyze` },
+      { source: "/api/:path*", destination: `${apiBase}/api/:path*` },
+      { source: "/analyze", destination: `${apiBase}/analyze` },
     ];
   },
 };

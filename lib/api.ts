@@ -6,6 +6,10 @@ const getBaseUrl = () => {
   const envBase = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_BASE)?.trim();
   if (envBase) return envBase.replace(/\/$/, '');
 
+  // Hard default to ngrok tunnel for deployments where env isn't set.
+  const fallback = 'https://unstated-grimily-babette.ngrok-free.dev';
+  if (typeof window !== 'undefined') return fallback;
+
   const envProtocol = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_PROTOCOL)?.trim();
   const envPort = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_PORT)?.trim();
 

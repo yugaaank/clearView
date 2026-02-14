@@ -172,7 +172,16 @@ async def analyze_face(file: UploadFile = File(...)):
         result = service.analyze(frame)
         return {"success": True, **result}
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        # Surface predictable validation issues (e.g., face too small) to the
+        # frontend without an HTTP error so the UI can show a friendly message.
+        return {
+            "success": False,
+            "label": "error",
+            "confidence": 0,
+            "passed": False,
+            "error": str(exc),
+            "status": 400,
+        }
     except Exception as exc:  # pragma: no cover - defensive guard for unexpected runtime errors
         raise HTTPException(status_code=500, detail=f"Inference failure: {exc}")
 
