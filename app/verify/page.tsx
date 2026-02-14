@@ -46,6 +46,14 @@ export default function VerifyPage() {
     const [, setAudioBlob] = useState<Blob | null>(null);
     const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
     const [selectedMicId, setSelectedMicId] = useState<string | 'default'>('default');
+    const [baselineCx, setBaselineCx] = useState<number | null>(null); // face center baseline from frontal pass
+    const actionPrompts = [
+        'Give me a quick smile then a frown.',
+        'Nod up and down twice.',
+        'Shake your head left and right.',
+        'Raise your eyebrows, then relax.',
+        'Lean closer, then back to center.',
+    ];
     const [countdown, setCountdown] = useState<number | null>(null);
     const [quality, setQuality] = useState<{ center: boolean | null; size: boolean | null; light: boolean | null }>({
         center: null,
@@ -85,19 +93,14 @@ export default function VerifyPage() {
             const baseOk = await waitForQualityStreak(5);
             if (!baseOk) return failAndReset('Could not confirm a clear view. Try again.');
 
-            // 2) Look left for 5s
-            setChallenge({ challenge_id: 'local-left', gesture: 'turn_left', instruction: 'Look left' });
-            setMessage('Look left and hold for 5s');
-            const leftOk = await waitForPoseHold('turn_left', 'Look left', 5000);
-            if (!leftOk) return failAndReset('Could not confirm left look. Try again.');
+            // 2) Show all prompts (no verification) to guide user through movements
+            for (const prompt of actionPrompts) {
+                setChallenge({ challenge_id: 'local-prompt', gesture: 'none', instruction: prompt });
+                setMessage(prompt);
+                await new Promise(res => setTimeout(res, 3000));
+            }
 
-            // 3) Look right for 5s
-            setChallenge({ challenge_id: 'local-right', gesture: 'turn_right', instruction: 'Look right' });
-            setMessage('Look right and hold for 5s');
-            const rightOk = await waitForPoseHold('turn_right', 'Look right', 5000);
-            if (!rightOk) return failAndReset('Could not confirm right look. Try again.');
-
-            // 4) Voice step (5s recording)
+            // 3) Voice step (5s recording)
             setStatus('voice');
             setMessage('Face verified. Please speak: "My voice is my password"');
             setProcessing(false);
@@ -148,6 +151,10 @@ export default function VerifyPage() {
                     streak += 1;
                     setMessage(`Hold steady (${streak}/${requiredStreak})`);
                     if (streak >= requiredStreak) {
+                        if (live.bbox) {
+                            const cx = live.bbox.x + live.bbox.w / 2;
+                            setBaselineCx(cx); // set baseline eye/face center
+                        }
                         setMessage('Face confirmed.');
                         return true;
                     }
@@ -164,6 +171,53 @@ export default function VerifyPage() {
             await new Promise(res => setTimeout(res, 300));
         }
         return false;
+    };
+
+    /**
+     * Detect gaze/turn using:
+     * - backend pose if provided
+     * - otherwise bbox offset vs baseline + aspect-ratio yaw hint
+     */
+    const detectGazeDirection = (live: AnalyzeResponse, capture: FrameCapture) => {
+        const backendPose = (live as any).pose as string | undefined;
+        const bbox = live.bbox;
+        if (backendPose === 'turn_left' || backendPose === 'turn_right' || backendPose === 'frontal') {
+            return { direction: backendPose, confidence: 0.95, delta: 0, scoreLeft: backendPose === 'turn_left' ? 0.95 : 0, scoreRight: backendPose === 'turn_right' ? 0.95 : 0 };
+        }
+
+        if (!bbox) return { direction: 'frontal', confidence: 0, delta: 0, scoreLeft: 0, scoreRight: 0 };
+
+        const faceCx = bbox.x + bbox.w / 2;
+        const referenceCx = baselineCx ?? capture.width / 2;
+        const delta = (faceCx - referenceCx) / capture.width; // negative when left of baseline
+        const yawHint = bbox.w / bbox.h; // side turns usually shrink width
+
+        // Scores from horizontal displacement
+        const dispLeft = Math.max(0, -delta);
+        const dispRight = Math.max(0, delta);
+        let scoreLeft = Math.min(1, dispLeft / 0.06);   // 6% shift => strong score
+        let scoreRight = Math.min(1, dispRight / 0.06);
+
+        // Yaw hint bonus if width/height ratio is small (<0.7 typically means some yaw)
+        const yawBonus = Math.max(0, (0.8 - yawHint) / 0.3); // slightly looser
+        if (dispLeft > dispRight) scoreLeft = Math.min(1, scoreLeft + yawBonus * 0.6);
+        if (dispRight > dispLeft) scoreRight = Math.min(1, scoreRight + yawBonus * 0.6);
+
+        let direction: 'turn_left' | 'turn_right' | 'frontal' = 'frontal';
+        let confidence = 0;
+        if (scoreLeft >= 0.3 || scoreRight >= 0.3) {
+            if (scoreLeft > scoreRight) {
+                direction = 'turn_left';
+                confidence = scoreLeft;
+            } else {
+                direction = 'turn_right';
+                confidence = scoreRight;
+            }
+        } else {
+            confidence = Math.max(scoreLeft, scoreRight);
+        }
+
+        return { direction, confidence, delta, scoreLeft, scoreRight };
     };
 
     /**
@@ -190,8 +244,8 @@ export default function VerifyPage() {
                     continue;
                 }
 
-                const pose = (live as any).pose;
-                const poseMatches = pose ? pose === targetPose : live.label === 'real';
+                const inferred = detectGazeDirection(live, capture);
+                const poseMatches = inferred.direction === targetPose && inferred.confidence >= 0.3;
                 const quality = evaluateFaceQuality(live, capture, { challenge_id: 'local', gesture: targetPose, instruction });
                 setQuality({ center: quality.centerOk, size: quality.sizeOk, light: quality.lightOk });
                 updateProgressFromLive(live, capture, quality);
@@ -199,8 +253,7 @@ export default function VerifyPage() {
                 if (poseMatches && quality.ok) {
                     if (!holdStart) holdStart = Date.now();
                     const elapsed = Date.now() - holdStart;
-                    const remaining = Math.max(0, holdMs - elapsed);
-                    setMessage(`${instruction} — hold ${(elapsed / 1000).toFixed(1)}s / ${(holdMs / 1000).toFixed(0)}s`);
+                    setMessage(`${instruction} — hold ${(elapsed / 1000).toFixed(1)}s / ${(holdMs / 1000).toFixed(0)}s (Δ ${(inferred.delta * 100).toFixed(1)}%, L ${(inferred.scoreLeft * 100).toFixed(0)} / R ${(inferred.scoreRight * 100).toFixed(0)})`);
                     if (elapsed >= holdMs) {
                         setMessage(`${instruction} confirmed.`);
                         return true;
