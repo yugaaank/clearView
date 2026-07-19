@@ -1,60 +1,74 @@
 <div align="center">
 
-# 🛡️ clearView
+# clearView
 
-**Liveness & deepfake-aware verification — a Next.js app with on-device anti-spoofing.**
-
-[![Stack](https://img.shields.io/badge/stack-Next.js%2016-8b5cf6?style=for-the-badge)](https://nextjs.org)
-[![ML](https://img.shields.io/badge/ml-anti--spoofing%20%2B%20resemblyzer-8b5cf6?style=for-the-badge)](#)
-[![PRs](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=for-the-badge)](#contributing)
-
-</div>
-
----
-
-<div align="center">
-
-| | |
-|---|---|
-| 🎯 **Purpose** | Face liveness / deepfake detection UI |
-| 🧩 **Stack** | Next.js 16 · TypeScript · Python ML helpers |
-| 🌑 **Theme** | Dark / rich |
-| 📦 **Status** | In development |
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](#how-it-works)
+[![ML](https://img.shields.io/badge/models-anti--spoof%20%2B%20resemblyzer-FF6F00?logo=python&logoColor=white)](#how-it-works)
+[![License](https://img.shields.io/badge/license-MIT-8b5cf6)](#license)
 
 </div>
 
----
+`clearView` is a liveness / deepfake-aware verification app. A FastAPI backend
+runs face detection, anti-spoofing, and speaker verification on uploaded media;
+a Next.js front end walks a user through capture, shows a live verification
+result, and presents an analytics dashboard for reviewers.
 
-## ✨ Features
+## Why
 
-- 🧠 **Anti-spoofing** — Silent-Face-Anti-Spoofing model bundled
-- 🔊 **Voice check** — Resemblyzer speaker embeddings
-- 🧪 **Test harness** — `test_deepfake.sh` + sample audio (`noise.wav`, `silence.wav`, `monotonic.wav`)
-- 🎨 Next.js 16 + `framer-motion` + `lucide-react` UI
+Static "is this a real face?" checks are easy to spoof. `clearView` combines
+several signals — MediaPipe face geometry, a Silent-Face anti-spoofing model,
+and Resemblyzer voice embeddings — and surfaces them through one verification
+flow plus a reviewer dashboard, so a decision has evidence behind it.
 
-## 🚀 Quick start
+## How it works
 
-```bash
-npm install
-npm run dev
-./test_deepfake.sh   # exercise the pipeline
-```
+**Backend** (`python/`):
 
-## 📁 Structure
+- `server.py` — FastAPI app with CORS, a `WebSocket` for streaming, and
+  `UploadFile` endpoints. Uses OpenCV (`cv2`) + NumPy for frame handling and
+  MediaPipe (`face_mesh`, `hands`) for geometry, with safe fallbacks if
+  MediaPipe's top-level `solutions` import is unavailable (v0.10+).
+- `analytics/` + `auth/` — request analytics and an auth layer for reviewers.
+- `vendors/` — bundled models, including `Silent-Face-Anti-Spoofing` and
+  `Resemblyzer` for voice embedding comparison.
+- `test_phase2.py` — pipeline smoke test; `requirements.txt` pins deps.
+
+**Frontend** (`app/` — Next.js App Router):
+
+- `app/verify/page.tsx` — the capture + verification step.
+- `app/dashboard/page.tsx` — reviewer analytics view.
+- `app/success/` — post-verification state.
+- `lib/`, `hooks/`, `components/` — shared client logic and UI.
+
+`create_audio_test_files.py` and sample clips (`noise.wav`, `silence.wav`,
+`monotonic.wav`) support local testing via `test_deepfake.sh`.
+
+## Project structure
 
 ```
 clearView/
-├── app/  components/  hooks/  lib/  public/
-├── python/            # ML scripts
+├── app/              # Next.js 16 (verify / dashboard / success)
+├── python/           # FastAPI + CV/ML services
+│   ├── server.py  auth/  analytics/  vendors/
+│   └── test_phase2.py  requirements.txt
 ├── Silent-Face-Anti-Spoofing-master/
 ├── Resemblyzer/
 └── test_deepfake.sh
 ```
 
-## 🤝 Contributing
+## Getting started
 
-PRs welcome — match the dark/rich README style.
+```bash
+# backend
+cd python && pip install -r requirements.txt
+uvicorn server:app --reload
 
-## 📜 License
+# frontend
+npm install
+npm run dev
+```
 
-MIT © Yugank Rathore
+## License
+
+MIT
