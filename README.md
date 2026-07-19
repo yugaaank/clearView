@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
 
-## Getting Started
+# 🛡️ clearView
 
-First, run the development server:
+**Liveness & deepfake-aware verification — a Next.js app with on-device anti-spoofing.**
+
+[![Stack](https://img.shields.io/badge/stack-Next.js%2016-8b5cf6?style=for-the-badge)](https://nextjs.org)
+[![ML](https://img.shields.io/badge/ml-anti--spoofing%20%2B%20resemblyzer-8b5cf6?style=for-the-badge)](#)
+[![PRs](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=for-the-badge)](#contributing)
+
+</div>
+
+---
+
+<div align="center">
+
+| | |
+|---|---|
+| 🎯 **Purpose** | Face liveness / deepfake detection UI |
+| 🧩 **Stack** | Next.js 16 · TypeScript · Python ML helpers |
+| 🌑 **Theme** | Dark / rich |
+| 📦 **Status** | In development |
+
+</div>
+
+---
+
+## ✨ Features
+
+- 🧠 **Anti-spoofing** — Silent-Face-Anti-Spoofing model bundled
+- 🔊 **Voice check** — Resemblyzer speaker embeddings
+- 🧪 **Test harness** — `test_deepfake.sh` + sample audio (`noise.wav`, `silence.wav`, `monotonic.wav`)
+- 🎨 Next.js 16 + `framer-motion` + `lucide-react` UI
+
+## 🚀 Quick start
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+./test_deepfake.sh   # exercise the pipeline
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📁 Structure
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+clearView/
+├── app/  components/  hooks/  lib/  public/
+├── python/            # ML scripts
+├── Silent-Face-Anti-Spoofing-master/
+├── Resemblyzer/
+└── test_deepfake.sh
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🤝 Contributing
 
-## Learn More
+PRs welcome — match the dark/rich README style.
 
-To learn more about Next.js, take a look at the following resources:
+## 📜 License
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT © Yugank Rathore
